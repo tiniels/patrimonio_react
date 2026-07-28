@@ -1,39 +1,36 @@
-import { RESP_USERS, type RespUser } from "./respUsers";
+import type { RespUser } from "./respUsers";
 
-const KEY = "resp-session:v1";
+const LEGACY_RESP_SESSION_KEY = "resp-session:v1";
 
-export function findUser(login: string, senha: string): RespUser | null {
-  const l = login.trim().toLowerCase();
-  const s = senha.trim();
-  return (
-    RESP_USERS.find(
-      (u) => u.login.toLowerCase() === l && u.senha === s,
-    ) ?? null
-  );
+/**
+ * Client-side credential matching is disabled. Authentication must be performed
+ * by the server-side identity implementation.
+ */
+export function findUser(_login: string, _senha: string): RespUser | null {
+  return null;
 }
 
-export function signIn(user: RespUser) {
+/**
+ * Browser-created sessions are not trusted and cannot be persisted.
+ */
+export function signIn(_user: RespUser): never {
+  throw new Error("Criação de sessão no navegador desativada por contenção de segurança.");
+}
+
+export function signOut(): void {
+  if (typeof window === "undefined") return;
+
   try {
-    localStorage.setItem(KEY, JSON.stringify(user));
+    window.localStorage.removeItem(LEGACY_RESP_SESSION_KEY);
+    window.sessionStorage.removeItem(LEGACY_RESP_SESSION_KEY);
   } catch {
-    /* ignore */
+    // Storage can be unavailable in hardened/private browsing contexts.
   }
 }
 
-export function signOut() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
+/**
+ * Web Storage is never an authentication source of truth.
+ */
 export function getSession(): RespUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as RespUser) : null;
-  } catch {
-    return null;
-  }
+  return null;
 }
