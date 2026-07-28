@@ -31,11 +31,12 @@
 | --- | --- | --- | --- | --- |
 | SEC-001 | Crítica | `src/lib/authStore.ts` | Credenciais administrativas estavam codificadas no frontend. | Remover registros e bloquear autenticação local. |
 | SEC-002 | Crítica | `src/lib/respUsers.ts` | Base com dados pessoais e senhas estava incluída no bundle público. | Substituir por contrato vazio; usar dados sintéticos somente em testes. |
-| SEC-003 | Crítica | `src/routes/login.tsx` | Login administrativo era validado no navegador e oferecia contas de teste preenchíveis. | Substituir por tela de contenção. |
-| SEC-004 | Crítica | `src/routes/responsavel-login.tsx` | Login, exemplos de usuários e recuperação/OTP eram simulados no cliente. | Substituir por tela de contenção. |
-| SEC-005 | Crítica | `src/routes/set-password.tsx` | Busca de identidade e redefinição de senha eram executadas e persistidas no navegador. | Desativar até existir fluxo server-side. |
-| SEC-006 | Alta | `src/components/AuthGuard.tsx` | Proteção de rota dependia de estado do cliente; não comprova autorização no backend. | Sessão cliente passa a ser sempre não autenticada; correção definitiva está nos Dias 4–6. |
-| SEC-007 | Alta | histórico Git e deploys anteriores | Remover arquivos do snapshot atual não elimina cópias históricas ou bundles já publicados. | Rotação/revogação e decisão de reescrita de histórico registradas como ações externas obrigatórias. |
+| SEC-003 | Crítica | `src/lib/respAuth.ts` | Havia um segundo mecanismo de comparação de senha e sessão em Web Storage. | Bloquear comparação, criação e leitura de sessão cliente. |
+| SEC-004 | Crítica | `src/routes/login.tsx` | Login administrativo era validado no navegador e oferecia contas de teste preenchíveis. | Substituir por tela de contenção. |
+| SEC-005 | Crítica | `src/routes/responsavel-login.tsx` | Login, exemplos de usuários e recuperação/OTP eram simulados no cliente. | Substituir por tela de contenção. |
+| SEC-006 | Crítica | `src/routes/set-password.tsx` | Busca de identidade e redefinição de senha eram executadas e persistidas no navegador. | Desativar até existir fluxo server-side. |
+| SEC-007 | Alta | `src/components/AuthGuard.tsx` | Proteção de rota dependia de estado do cliente; não comprova autorização no backend. | Sessão cliente passa a ser sempre não autenticada; correção definitiva está nos Dias 4–6. |
+| SEC-008 | Alta | histórico Git e deploys anteriores | Remover arquivos do snapshot atual não elimina cópias históricas ou bundles já publicados. | Rotação/revogação e decisão de reescrita de histórico registradas como ações externas obrigatórias. |
 | QUAL-001 | Alta | `package.json`, `tsconfig.json` | `strict` está habilitado, mas não há script dedicado de typecheck nem quality gate comprovado. | Planejado para o Dia 3. |
 | ARCH-001 | Alta | rotas e stores | Várias telas usam arrays locais, alertas, placeholders e mutações somente em memória/navegador. | Inventariar; não declarar funcionalidade de produção. |
 
@@ -108,7 +109,7 @@ A árvore gerada contém as seguintes áreas. A presença de rota confirma apena
 
 | Capacidade | Estado observado | Evidência necessária para confirmar produção |
 | --- | --- | --- |
-| Autenticação | Simulada no cliente; bloqueada na contenção | provedor/servidor, cookie seguro, revogação, rate limiting, testes de abuso |
+| Autenticação | Dois mecanismos simulados no cliente; bloqueados na contenção | provedor/servidor, cookie seguro, revogação, rate limiting, testes de abuso |
 | Autorização | Guard de interface por papel | policies no backend, escopo organizacional e testes horizontais/verticais |
 | Usuários/responsáveis | Fixtures e mutação local | fonte oficial, vigência, convite/primeiro acesso e auditoria |
 | Cadastro patrimonial | Telas/rotas existentes | contrato, banco, validações, concorrência e reconciliação |
