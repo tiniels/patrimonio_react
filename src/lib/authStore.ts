@@ -355,6 +355,13 @@ export function getStoredUser(): AuthUser | null {
 }
 
 /**
+ * Alias retrocompatível para obtenção da sessão ativa do responsável
+ */
+export function getRespAuthSession(): AuthUser | null {
+  return getStoredUser();
+}
+
+/**
  * Hook React reativo para consumir o estado de autenticação
  */
 export function useAuth() {
