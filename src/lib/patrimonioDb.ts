@@ -8,6 +8,7 @@ export type PatrimonioRow = {
   conta_contabil_nome: string | null;
   data_baixa: string | null;
   localizacao: string | null;
+  estadoConservacao: string | null;
 };
 
 export const PATRIMONIO_DATA_UNAVAILABLE_CODE = "PATRIMONIO_DATA_UNAVAILABLE";
@@ -92,6 +93,10 @@ class DisabledPatrimonioQuery implements PromiseLike<DisabledQueryResult> {
   }
 
   single(..._args: unknown[]): this {
+    return this;
+  }
+
+  maybeSingle(..._args: unknown[]): this {
     return this;
   }
 
