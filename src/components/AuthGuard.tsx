@@ -1,0 +1,96 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate, useLocation } from "@tanstack/react-router";
+import { useAuth, type UserRole } from "@/lib/authStore";
+import { ShieldAlert, Loader2, ArrowLeft, LogOut } from "lucide-react";
+
+interface AuthGuardProps {
+  children: ReactNode;
+  allowedRoles?: UserRole[];
+  fallbackLoginPath?: "/login" | "/responsavel-login";
+}
+
+export function AuthGuard({
+  children,
+  allowedRoles,
+  fallbackLoginPath = "/login",
+}: AuthGuardProps) {
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    if (!isAuthenticated) {
+      const redirect = location.pathname !== "/" ? location.pathname : undefined;
+      const targetLogin = allowedRoles?.includes("responsavel")
+        ? "/responsavel-login"
+        : fallbackLoginPath;
+
+      navigate({
+        to: targetLogin,
+        search: redirect ? { redirect } : undefined,
+        replace: true,
+      });
+    }
+  }, [isAuthenticated, mounted, location.pathname, allowedRoles, fallbackLoginPath, navigate]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+        <p className="text-sm text-muted-foreground">Verificando credenciais de acesso...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+        <p className="text-sm text-muted-foreground">Redirecionando para a tela de autenticação...</p>
+      </div>
+    );
+  }
+
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-md glass-card p-8 text-center flex flex-col items-center gap-4">
+          <div className="h-14 w-14 rounded-full bg-destructive/15 text-destructive flex items-center justify-center">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Acesso Restrito</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Seu perfil (<strong>{user.roleLabel}</strong>) não possui permissão para acessar esta área do sistema.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full mt-4">
+            <button
+              onClick={() => navigate({ to: "/" })}
+              className="flex-1 h-10 rounded-md border border-input bg-background/80 hover:bg-accent hover:text-accent-foreground flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" /> Página Inicial
+            </button>
+            <button
+              onClick={() => {
+                navigate({ to: user.role === "responsavel" ? "/responsavel-login" : "/login" });
+              }}
+              className="flex-1 h-10 rounded-md bg-primary text-primary-foreground hover:opacity-90 flex items-center justify-center gap-2 text-sm font-medium transition-opacity"
+            >
+              <LogOut className="h-4 w-4" /> Trocar Conta
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
