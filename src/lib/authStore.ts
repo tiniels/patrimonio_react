@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { RESP_USERS, type RespUser } from "./respUsers";
 
 export type UserRole = "admin" | "contabilidade" | "chefia" | "galpao" | "responsavel";
@@ -24,237 +24,127 @@ export interface AuthUser {
   lastLogin?: string;
 }
 
+/**
+ * Compatibility shape only. No credential records are shipped to the browser.
+ */
 export interface AdminUserRecord {
   login: string;
   senha: string;
   user: AuthUser;
 }
 
+export type AuthenticateFailureReason =
+  | "invalid_credentials"
+  | "vinculo_expirado"
+  | "somente_leitura"
+  | "service_unavailable";
+
 export interface AuthenticateResult {
   user: AuthUser | null;
-  reason?: "invalid_credentials" | "vinculo_expirado" | "somente_leitura";
+  reason?: AuthenticateFailureReason;
   statusMessage?: string;
 }
 
-// Contas de teste administrativas do sistema
-export const ADMIN_USERS: AdminUserRecord[] = [
-  {
-    login: "neemias.42159",
-    senha: "Tini7426",
-    user: {
-      id: "adm-neemias",
-      name: "Neemias",
-      login: "neemias.42159",
-      role: "admin",
-      roleLabel: "Administrador / Contabilidade",
-      cargo: "Gestor de Patrimônio e Contabilidade",
-      secretaria: "Secretaria de Finanças e Patrimônio",
-      setor: "Divisão de Gestão Patrimonial",
-      codigoSetor: "PAT-001",
-      status: "Liberado Externa",
-      email: "neemias.42159@santanadeparnaiba.sp.gov.br",
-    },
-  },
-  {
-    login: "admin.sistema",
-    senha: "admin123",
-    user: {
-      id: "adm-001",
-      name: "Administrador Geral",
-      login: "admin.sistema",
-      role: "admin",
-      roleLabel: "Administrador de Segurança",
-      cargo: "Administrador de Sistemas",
-      secretaria: "Secretaria de Tecnologia e Gestão",
-      setor: "Divisão de TI e Segurança",
-      codigoSetor: "TI-001",
-      status: "Liberado Externa",
-      email: "admin.patrimonio@santanadeparnaiba.sp.gov.br",
-    },
-  },
-  {
-    login: "chefia.patrimonio",
-    senha: "chefia123",
-    user: {
-      id: "chefia-001",
-      name: "Coordenadoria de Chefia",
-      login: "chefia.patrimonio",
-      role: "chefia",
-      roleLabel: "Chefia Executiva",
-      cargo: "Chefe do Setor Patrimonial",
-      secretaria: "Gabinete do Prefeito",
-      setor: "Coordenação Geral de Bens",
-      codigoSetor: "CHEF-001",
-      status: "Liberado Externa",
-      email: "chefia.patrimonio@santanadeparnaiba.sp.gov.br",
-    },
-  },
-  {
-    login: "galpao.operador",
-    senha: "galpao123",
-    user: {
-      id: "galpao-001",
-      name: "Operador de Galpão",
-      login: "galpao.operador",
-      role: "galpao",
-      roleLabel: "Almoxarifado / Galpão Central",
-      cargo: "Fiel de Depósito",
-      secretaria: "Secretaria de Serviços Municipais",
-      setor: "Galpão Central de Armazenamento",
-      codigoSetor: "GALP-001",
-      status: "Liberado Externa",
-      email: "galpao@santanadeparnaiba.sp.gov.br",
-    },
-  },
-];
+export const AUTH_SECURITY_LOCKDOWN = true as const;
+export const AUTH_LOCKDOWN_MESSAGE =
+  "A autenticação foi temporariamente desativada porque o protótipo anterior processava credenciais no navegador. O acesso será reaberto somente após a ativação da autenticação no servidor.";
 
-const SESSION_STORAGE_KEY = "smart-patrimonio-session:v2";
-const DYNAMIC_USERS_KEY = "smart-patrimonio-dynamic-users:v1";
-const CUSTOM_PASSWORDS_KEY = "smart-patrimonio-passwords:v1";
-const TERMS_ACCEPTED_KEY = "smart-patrimonio-terms-accepted:v1";
+/**
+ * Deliberately empty. Administrative identities must come from the server-side
+ * identity provider and must never be compiled into the JavaScript bundle.
+ */
+export const ADMIN_USERS: AdminUserRecord[] = [];
+
+const LEGACY_SESSION_KEYS = [
+  "smart-patrimonio-session:v2",
+  "resp-session:v1",
+  "smart-patrimonio-dynamic-users:v1",
+  "smart-patrimonio-passwords:v1",
+  "smart-patrimonio-terms-accepted:v1",
+] as const;
+
 const LISTENERS = new Set<() => void>();
 
-function notifyListeners() {
-  LISTENERS.forEach((cb) => cb());
+function notifyListeners(): void {
+  LISTENERS.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void): () => void {
+  LISTENERS.add(listener);
+  return () => LISTENERS.delete(listener);
+}
+
+function getNullSnapshot(): AuthUser | null {
+  return null;
+}
+
+function clientCredentialStorageDisabled(operation: string): never {
+  throw new Error(
+    `${operation} indisponível: credenciais, usuários e sessões não podem ser persistidos no navegador.`,
+  );
 }
 
 /**
- * Obtém senhas redefinidas / personalizadas do localStorage
+ * Compatibility API. Password material is never read from browser storage.
  */
 export function getCustomPasswordMap(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(CUSTOM_PASSWORDS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  return {};
 }
 
 /**
- * Define nova senha para um usuário por login
+ * Compatibility API kept while callers migrate to the server-side identity API.
  */
-export function setCustomPassword(login: string, newPassword: string): void {
-  try {
-    const map = getCustomPasswordMap();
-    map[login.trim().toLowerCase()] = newPassword.trim();
-    localStorage.setItem(CUSTOM_PASSWORDS_KEY, JSON.stringify(map));
-  } catch (e) {
-    console.error("Erro ao salvar nova senha:", e);
-  }
+export function setCustomPassword(_login: string, _newPassword: string): void {
+  clientCredentialStorageDisabled("Redefinição de senha");
 }
 
 /**
- * Obtém usuários dinâmicos cadastrados em tempo de execução
+ * Compatibility API. Dynamic identity data is no longer stored in localStorage.
  */
 export function getDynamicUsers(): RespUser[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DYNAMIC_USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 /**
- * Adiciona ou atualiza um usuário cadastrado
+ * Compatibility API kept while callers migrate to the server-side identity API.
  */
-export function addDynamicUser(user: RespUser): void {
-  try {
-    const current = getDynamicUsers();
-    const filtered = current.filter((u) => u.login.toLowerCase() !== user.login.toLowerCase());
-    filtered.unshift(user);
-    localStorage.setItem(DYNAMIC_USERS_KEY, JSON.stringify(filtered));
-    notifyListeners();
-  } catch (e) {
-    console.error("Erro ao adicionar usuário dinâmico:", e);
-  }
+export function addDynamicUser(_user: RespUser): void {
+  clientCredentialStorageDisabled("Cadastro de usuário");
 }
 
 /**
- * Obtém a lista consolidada de todos os responsáveis (base estática + cadastrados em tempo de execução)
+ * The client bundle contains no real identities. Synthetic fixtures may be
+ * injected only by isolated tests and must never be used as authentication data.
  */
 export function getAllRespUsers(): RespUser[] {
-  const dynamic = getDynamicUsers();
-  const dynamicLogins = new Set(dynamic.map((d) => d.login.toLowerCase()));
-  const staticFiltered = RESP_USERS.filter((s) => !dynamicLogins.has(s.login.toLowerCase()));
-  return [...dynamic, ...staticFiltered];
+  return [...RESP_USERS];
 }
 
 /**
- * Autentica credenciais administrativas ou de responsável com verificação de status do vínculo
+ * Client-side authentication is intentionally blocked during containment.
  */
-export function authenticateUserDetailed(loginInput: string, senhaInput: string): AuthenticateResult {
-  const loginNorm = loginInput.trim().toLowerCase();
-  const senhaNorm = senhaInput.trim();
-
-  if (!loginNorm || !senhaNorm) {
-    return { user: null, reason: "invalid_credentials" };
-  }
-
-  const customPasswords = getCustomPasswordMap();
-
-  // 1. Procurar em usuários administrativos
-  const adminMatch = ADMIN_USERS.find((a) => {
-    const validPass = customPasswords[a.login.toLowerCase()] ?? a.senha;
-    return a.login.toLowerCase() === loginNorm && validPass === senhaNorm;
-  });
-
-  if (adminMatch) {
-    return {
-      user: {
-        ...adminMatch.user,
-        lastLogin: new Date().toISOString(),
-      },
-    };
-  }
-
-  // 2. Procurar em responsáveis de setor
-  const allResp = getAllRespUsers();
-  const respMatch = allResp.find((r) => {
-    const validPass = customPasswords[r.login.toLowerCase()] ?? r.senha;
-    return r.login.toLowerCase() === loginNorm && validPass === senhaNorm;
-  });
-
-  if (respMatch) {
-    const statusNorm = (respMatch.status ?? "").trim().toUpperCase();
-
-    // Verificação de Bloqueio por vínculo expirado (RN-MOD-03-02 / RF-MOD-03-07)
-    if (statusNorm === "FINALIZADO" || statusNorm === "BLOQUEADO" || statusNorm === "SOMENTE ETIQUETAS") {
-      return {
-        user: null,
-        reason: "vinculo_expirado",
-        statusMessage: `Seu vínculo com o setor está marcado como '${respMatch.status}'. Acesso suspenso ou transferido.`,
-      };
-    }
-
-    const authUser = convertRespToAuthUser(respMatch);
-    
-    // Verificar se já aceitou os termos LGPD
-    const termsMap = getTermsAcceptedMap();
-    if (termsMap[authUser.login.toLowerCase()]) {
-      authUser.termsAccepted = true;
-      authUser.termsAcceptedAt = termsMap[authUser.login.toLowerCase()];
-    }
-
-    return { user: authUser };
-  }
-
-  return { user: null, reason: "invalid_credentials" };
+export function authenticateUserDetailed(
+  _loginInput: string,
+  _senhaInput: string,
+): AuthenticateResult {
+  return {
+    user: null,
+    reason: "service_unavailable",
+    statusMessage: AUTH_LOCKDOWN_MESSAGE,
+  };
 }
 
 /**
- * Wrapper simplificado retrocompatível
+ * Backward-compatible wrapper. Always returns null until server authentication
+ * is enabled.
  */
-export function authenticateUser(loginInput: string, senhaInput: string): AuthUser | null {
-  const result = authenticateUserDetailed(loginInput, senhaInput);
-  return result.user;
+export function authenticateUser(_loginInput: string, _senhaInput: string): AuthUser | null {
+  return null;
 }
 
 export function convertRespToAuthUser(resp: RespUser): AuthUser {
   return {
-    id: `resp-${resp.unidadeCodigo}`,
+    id: `resp-${resp.unidadeCodigo ?? resp.login}`,
     name: resp.responsavelNome || resp.responsavel,
     login: resp.login,
     role: "responsavel",
@@ -268,137 +158,69 @@ export function convertRespToAuthUser(resp: RespUser): AuthUser {
     email: resp.email,
     telefone: resp.telefone,
     status: resp.status,
-    lastLogin: new Date().toISOString(),
   };
 }
 
 /**
- * Gerenciamento de Aceite dos Termos de Fiel Depositário / LGPD
+ * Compatibility API. Legal acceptance must be recorded server-side with an
+ * immutable audit event.
  */
 export function getTermsAcceptedMap(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(TERMS_ACCEPTED_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  return {};
 }
 
-export function recordTermsAcceptance(login: string): void {
-  try {
-    const map = getTermsAcceptedMap();
-    map[login.trim().toLowerCase()] = new Date().toISOString();
-    localStorage.setItem(TERMS_ACCEPTED_KEY, JSON.stringify(map));
-
-    // Atualizar usuário na sessão ativa se corresponder
-    const cur = getStoredUser();
-    if (cur && cur.login.toLowerCase() === login.trim().toLowerCase()) {
-      cur.termsAccepted = true;
-      cur.termsAcceptedAt = map[login.trim().toLowerCase()];
-      signInUser(cur);
-    }
-  } catch (e) {
-    console.error("Erro ao registrar aceite de termos:", e);
-  }
+export function recordTermsAcceptance(_login: string): void {
+  clientCredentialStorageDisabled("Aceite de termos");
 }
 
 /**
- * Salva a sessão ativa
+ * A browser-created session is not trusted. This function remains only to avoid
+ * breaking imports while the Day 4 identity implementation is introduced.
  */
-export function signInUser(user: AuthUser, rememberMe = true): void {
-  try {
-    const data = JSON.stringify(user);
-    if (rememberMe) {
-      localStorage.setItem(SESSION_STORAGE_KEY, data);
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    } else {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, data);
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
-    localStorage.setItem("resp-session:v1", data);
-  } catch (e) {
-    console.error("Erro ao salvar sessão de autenticação:", e);
-  }
-  notifyListeners();
+export function signInUser(_user: AuthUser, _rememberMe = true): void {
+  clientCredentialStorageDisabled("Criação de sessão");
 }
 
 /**
- * Encerra a sessão ativa
+ * Remove every legacy browser key so a previously forged/stale session cannot
+ * survive the security containment release.
  */
 export function signOutUser(): void {
-  try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    localStorage.removeItem("resp-session:v1");
-  } catch (e) {
-    console.error("Erro ao remover sessão de autenticação:", e);
+  if (typeof window !== "undefined") {
+    for (const key of LEGACY_SESSION_KEYS) {
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    }
   }
   notifyListeners();
 }
 
 /**
- * Obtém o usuário atualmente autenticado
+ * Browser storage is never a source of authentication truth.
  */
 export function getStoredUser(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const local = localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem("resp-session:v1");
-    if (local) return JSON.parse(local) as AuthUser;
-
-    const session = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (session) return JSON.parse(session) as AuthUser;
-  } catch (e) {
-    console.error("Erro ao ler sessão armazenada:", e);
-  }
   return null;
 }
 
-/**
- * Alias retrocompatível para obtenção da sessão ativa do responsável
- */
 export function getRespAuthSession(): AuthUser | null {
-  return getStoredUser();
+  return null;
 }
 
-/**
- * Hook React reativo para consumir o estado de autenticação
- */
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      setUser(getStoredUser());
-    };
-    LISTENERS.add(handleUpdate);
-    window.addEventListener("storage", handleUpdate);
-
-    return () => {
-      LISTENERS.delete(handleUpdate);
-      window.removeEventListener("storage", handleUpdate);
-    };
-  }, []);
+  const user = useSyncExternalStore(subscribe, getNullSnapshot, getNullSnapshot);
 
   return {
     user,
-    isAuthenticated: !!user,
-    loading,
-    role: user?.role ?? null,
-    isAdmin: user?.role === "admin" || user?.role === "contabilidade",
-    isResponsavel: user?.role === "responsavel",
-    isChefia: user?.role === "chefia",
-    isGalpao: user?.role === "galpao",
-    signIn: (user: AuthUser, remember = true) => {
-      setLoading(true);
-      signInUser(user, remember);
-      setLoading(false);
+    isAuthenticated: false,
+    loading: false,
+    role: null as UserRole | null,
+    isAdmin: false,
+    isResponsavel: false,
+    isChefia: false,
+    isGalpao: false,
+    signIn: (_nextUser: AuthUser, _remember = true) => {
+      clientCredentialStorageDisabled("Criação de sessão");
     },
-    signOut: () => {
-      setLoading(true);
-      signOutUser();
-      setLoading(false);
-    },
+    signOut: signOutUser,
   };
 }
