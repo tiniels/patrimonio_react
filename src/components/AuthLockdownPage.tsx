@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, LockKeyhole, ShieldAlert } from "lucide-react"
 interface AuthLockdownPageProps {
   title: string;
   description: string;
+  showBackLink?: boolean;
 }
 
 const REMEDIATION_STEPS = [
@@ -12,7 +13,11 @@ const REMEDIATION_STEPS = [
   "validação de autorização, auditoria e recuperação de acesso",
 ] as const;
 
-export function AuthLockdownPage({ title, description }: AuthLockdownPageProps) {
+export function AuthLockdownPage({
+  title,
+  description,
+  showBackLink = true,
+}: AuthLockdownPageProps) {
   const headingId = "security-lockdown-heading";
   const statusId = "security-lockdown-status";
 
@@ -72,14 +77,16 @@ export function AuthLockdownPage({ title, description }: AuthLockdownPageProps) 
         </section>
 
         <div className="flex flex-col gap-3 border-t border-border/60 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            to="/"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-input bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Voltar ao portal
-          </Link>
-          <p className="text-center text-xs leading-5 text-muted-foreground sm:text-right">
+          {showBackLink ? (
+            <Link
+              to="/"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-input bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Voltar ao portal
+            </Link>
+          ) : null}
+          <p className={`text-center text-xs leading-5 text-muted-foreground ${showBackLink ? "sm:text-right" : "sm:mx-auto"}`}>
             Não informe credenciais por e-mail, chat ou chamado.
           </p>
         </div>
