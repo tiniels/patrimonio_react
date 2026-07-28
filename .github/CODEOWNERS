@@ -1,0 +1,7 @@
+# Until module owners are formally named, the repository owner reviews every change.
+* @tiniels
+
+/.github/ @tiniels
+/docs/ @tiniels
+/packages/contracts/ @tiniels
+/SECURITY.md @tiniels
