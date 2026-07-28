@@ -1,8 +1,8 @@
 # Matriz de Paridade v1
 
-**Versão:** 0.2 — Dia 2  
+**Versão:** 0.3 — Dia 3  
 **Data:** 28 de julho de 2026  
-**Regra:** a existência de uma rota React ou de um contrato proposto não comprova paridade funcional. Cada linha só pode ser encerrada com evidência do legado autenticado, contrato homologado, implementação, teste, reconciliação quando aplicável e aceite do dono do processo.
+**Regra:** a existência de uma rota React, contrato ou quality gate não comprova paridade funcional. Cada linha só pode ser encerrada com evidência do legado autenticado, contrato homologado, implementação, teste, reconciliação quando aplicável e aceite do dono do processo.
 
 ## Status permitidos
 
@@ -17,14 +17,14 @@
 
 | ID | Módulo | Evidência atual | Estado | Trilha prevista | Evidência mínima para validar |
 | --- | --- | --- | --- | --- | --- |
-| MOD-01 | Portal de entrada e seleção de perfil | Página pública e rota `/` | PROTÓTIPO | Dias 7–8 | walkthrough, acessibilidade, sessão válida e aceite |
+| MOD-01 | Portal de entrada e seleção de perfil | Página pública e rota `/` em contenção | CONTIDO | Dias 7–8 | walkthrough, acessibilidade, sessão válida e aceite |
 | MOD-02 | Autenticação administrativa | `/login`, `authStore`; ADR-0004 e contrato de sessão | CONTIDO | Dia 4 | IdP/servidor, cookie seguro, revogação, abuso e auditoria |
 | MOD-03 | Autenticação do responsável | `/responsavel-login`, `/set-password`; ADR-0004 | CONTIDO | Dia 6 | vínculo temporal, primeiro acesso, recuperação e auditoria |
 | MOD-04 | Usuários, perfis, permissões e escopos | rotas de usuários; BC-01/BC-02 e `/me` proposto | PROTÓTIPO | Dia 5 | catálogo de permissões, policy backend e revisão de acessos |
 | MOD-05 | Painel administrativo | `/adm`; BC-12 proposto | PROTÓTIPO | Dia 23 | fórmulas, data de corte, escopo e reconciliação |
-| MOD-06 | Explorador de patrimônios | `/adm/explorar`; listagem `/assets` proposta | PROTÓTIPO | Dias 9–11 | API implementada/paginada, filtros, autorização e exportação segura |
+| MOD-06 | Explorador de patrimônios | `/adm/explorar`; acesso direto ao serviço remoto removido; `/assets` proposto | CONTIDO | Dias 9–11 | API implementada/paginada, filtros, autorização e exportação segura |
 | MOD-07 | Base organizacional | `/adm/base`; BC-02/ERD temporal propostos | PROTÓTIPO | Dia 14 | fonte oficial, vigência, histórico e integridade referencial |
-| MOD-08 | Buscas/demonstrativos de responsáveis | `/adm/buscas`; BC-05 proposto | PROTÓTIPO | Dias 14–15 | API, minimização de PII, filtros e reconciliação |
+| MOD-08 | Buscas/demonstrativos de responsáveis | `/adm/buscas` substituída por contenção; BC-05 proposto | CONTIDO | Dias 14–15 | API, minimização de PII, filtros e reconciliação |
 | MOD-09 | Chefia — bens não localizados | `/chefia`; divergence case proposto | PROTÓTIPO | Dia 21 | workflow persistente, evidência, prazo e histórico |
 | MOD-10 | Etiquetas patrimoniais | `/adm/etiqueta`; Document context proposto | PROTÓTIPO | Dia 12 | lote, unicidade, PDF/impressão e reimpressão auditada |
 | MOD-11 | Monitoramento de inventário | `/adm/inventario/monitoramento`; BC-07 proposto | PROTÓTIPO | Dia 21 | snapshot, fórmulas, data de corte e drill-down |
@@ -38,7 +38,7 @@
 | MOD-19 | Troca de responsabilidade | rota correspondente; BC-05/máquina proposta | PROTÓTIPO | Dia 15 | vigência, aceite, transferência de escopo e auditoria |
 | MOD-20 | Portarias e designações | rotas de portaria; BC-10 proposto | PROTÓTIPO | Dia 15 | documento oficial, assinatura, vigência e versionamento |
 | MOD-21 | Fichas de locais e termos | `/adm/locais/fichas`; BC-10 proposto | PROTÓTIPO | Dia 15 | dados oficiais, geração, assinatura e arquivo |
-| MOD-22 | Bens do setor | `/locais/bens-setor`; `/assets` proposto | PROTÓTIPO | Dias 10–11 | API implementada/autorizada, paginação, detalhe e exportação |
+| MOD-22 | Bens do setor | `/locais/bens-setor`; acesso cliente direto contido; `/assets` proposto | CONTIDO | Dias 10–11 | API implementada/autorizada, paginação, detalhe e exportação |
 | MOD-23 | Painel do setor | `/painel-setor`; BC-12 proposto | PROTÓTIPO | Dias 7 e 23 | contexto, KPIs reconciliados e escopo |
 | MOD-24 | Painel do responsável | `/responsavel`; contexto `/me` proposto | PROTÓTIPO | Dias 6–7 | sessão real, tarefas, escopo e estados de erro |
 | MOD-25 | Painel do galpão | `/adm/galpao/graficos`; BC-09/BC-12 propostos | PROTÓTIPO | Dias 18 e 23 | ledger, indicadores e reconciliação |
@@ -55,7 +55,7 @@
 | MOD-36 | Histórico, auditoria e timeline | `/adm/auditoria`; BC-13/threat model propostos | PROTÓTIPO | Dias 11 e 27 | evento imutável, diff mascarado, busca e retenção |
 | MOD-37 | Central de relatórios | `/adm/relatorios`; BC-12 e contrato de report jobs propostos | PROTÓTIPO | Dia 22 | catálogo oficial, jobs, PDF/XLSX/CSV e reconciliação |
 | MOD-38 | Notificações, calendário e tarefas | `/adm/notificacoes`; BC-11 proposto | PROTÓTIPO | Dia 25 | eventos, prazos, preferências e links autorizados |
-| MOD-39 | Configurações do sistema | `/adm/configuracoes`; decisões por ADR/config servidor | PROTÓTIPO | Dias 3 e 27 | configuração server-side, permissões, auditoria e flags |
+| MOD-39 | Configurações do sistema | `/adm/configuracoes`; `.env.example`, validação e estratégia de ambientes | PROTÓTIPO | Dias 3 e 27 | configuração server-side, permissões, auditoria e flags implementadas |
 | MOD-40 | Busca global e qualidade de dados | `/adm/buscar`; política de PII/qualidade proposta | PROTÓTIPO | Dia 24 | índice por escopo, checks reproduzíveis e correção auditada |
 | MOD-41 | Integrações e interoperabilidade | `/adm/integracoes`; BC-14/outbox/anti-corruption layer propostos | NÃO DESCOBERTO | Dia 27 | inventário de sistemas, contratos, sandbox e reprocessamento |
 
@@ -67,25 +67,43 @@
 | `docs/architecture/DOMAIN_MAP.md` | MOD-02 a MOD-41 conforme contextos | owners por função e fronteiras definidos | pessoas/owners nominais pendentes |
 | `docs/architecture/DATA_MODEL.md` | MOD-02–04, 07–20, 22, 25–31, 34–41 | ERD temporal inicial | campos/constraints dependem do legado/fonte oficial |
 | `docs/architecture/STATE_MACHINES.md` | MOD-12–20, 26–28 | comandos, guardas e efeitos propostos | transições do legado ainda não homologadas |
-| `packages/contracts/openapi/patrimonio-v1.yaml` | MOD-02, 04, 06, 12, 14–16, 22, 34, 37 | OpenAPI 3.1 inicial | implementação e validação automática entram nos dias seguintes |
+| `packages/contracts/openapi/patrimonio-v1.yaml` | MOD-02, 04, 06, 12, 14–16, 22, 34, 37 | OpenAPI 3.1 inicial | implementação depende dos dias de domínio |
 | `docs/migration/MIGRATION_STRATEGY.md` | todos os módulos com dados | staging, ondas, reconciliação e rollback | fontes/volumes/janela reais indisponíveis |
 | `docs/architecture/NON_FUNCTIONAL_REQUIREMENTS.md` | transversal | budgets mensuráveis propostos | SLOs finais requerem owner e teste de carga |
 | `docs/architecture/THREAT_MODEL.md` | transversal | ameaças, controles e verificação priorizados | aceite nominal de segurança pendente |
 | `docs/adr/0001-0004` | arquitetura, dados, contratos, identidade | decisões e alternativas registradas | fornecedor/configuração ainda pendentes |
+
+## Evidências transversais do Dia 3
+
+| Evidência | Cobertura | Estado | Limite/bloqueio |
+| --- | --- | --- | --- |
+| `.github/workflows/ci.yml` | instalação, segurança, testes, tipos, lint, formato, OpenAPI e build | implementado no PR do Dia 3 | checks ainda precisam ser obrigatórios na `main` — issue #7 |
+| `.nvmrc`, `.npmrc`, `package-lock.json` | runtime e instalação reproduzível | Node 24 LTS e `npm ci` definidos | mudança de dependência exige atualização controlada do lockfile |
+| `scripts/check-env-example.mjs` | configuração e defaults seguros | testado com fixtures sintéticas | validação runtime server-side entra com cada módulo |
+| `scripts/check-sensitive-files.mjs` | arquivos/padrões sensíveis | encontrou e bloqueou riscos adicionais | complementa, não substitui secret scanning/push protection |
+| `tests/*.test.mjs` | contenção, ambiente, OpenAPI e política do repositório | testes automatizados adicionados | regras de negócio entram com as implementações |
+| `docs/environments/ENVIRONMENT_STRATEGY.md` | preview, produção, dados e variáveis | baseline executável | IdP/banco/storage/fila ainda não configurados |
+| `docs/architecture/REPOSITORY_STRUCTURE.md` | fronteiras e layout-alvo | root preservada como `apps/web` lógico | migração física só após CI/prova da Vercel |
+| `docs/runbooks/CI_CD.md` | promoção, diagnóstico e governança | versionado | branch protection requer ação administrativa |
+| `docs/runbooks/ROLLBACK.md` | reversão de código, dados e workflows | versionado | migrações reais terão runbook específico por onda |
+| `README.md` | entrada operacional e de segurança | substituído | não comprova funcionalidade de domínio |
+| contenção de `patrimonioDb` e `/adm/buscas` | MOD-06, MOD-08, MOD-22 | acesso direto e credenciais removidos | reabertura depende de API/policies e incidente #2 |
 
 ## Exceções e bloqueios formais
 
 | ID | Bloqueio | Impacto | Owner necessário | Situação |
 | --- | --- | --- | --- | --- |
 | BLK-001 | Walkthrough autenticado do legado não executado | impede confirmar campos, estados, permissões e relatórios | Produto + usuários-chave | Aberto |
-| BLK-002 | Credenciais expostas precisam de rotação/revogação externa | impede encerrar o incidente e reabrir login | Segurança + administradores dos sistemas | Aberto — issue #2 |
+| BLK-002 | Credenciais/chaves expostas precisam de rotação, revisão de policies e logs | impede encerrar o incidente e reabrir identidade/dados | Segurança + administradores/DBA | Aberto — issue #2 |
 | BLK-003 | Fonte oficial de identidade e dados não definida | impede Dias 4–6 e persistência real | Arquitetura + segurança + DBA | Aberto |
 | BLK-004 | Catálogo e fórmulas de relatórios não homologados | impede reconciliação e paridade de saída | Contabilidade + negócio | Aberto |
 | BLK-005 | UAT e signatários não definidos | impede status `VALIDADO` e go-live | Sponsor + Product Owner | Aberto |
 | BLK-006 | PostgreSQL, storage, fila e limites operacionais não aprovados | impede persistência, arquivos e jobs reais | Infra + DBA + segurança | Aberto |
 | BLK-007 | Integrações obrigatórias sem owner/sandbox/contrato | impede validar efeitos externos e migração | Arquitetura de integração + owners externos | Aberto |
 | BLK-008 | Owners definidos apenas por função | impede aceite formal dos módulos/ADRs | Sponsor + gestores das áreas | Aberto |
+| BLK-009 | Branch protection e checks obrigatórios ainda não comprovados | permite bypass administrativo do CI | Admin GitHub | Aberto — issue #7 |
+| BLK-010 | Layout físico `apps/*` ainda não migrado | mantém estrutura raiz do protótipo | Tech Lead/DevOps | Exceção temporária; root tratada como `apps/web` lógico |
 
 ## Regra de atualização
 
-Cada PR deve atualizar as linhas afetadas com: requisito, fonte, rota/API, migração, teste, evidência de autorização, evidência de acessibilidade, reconciliação e aceite. Nenhuma linha muda para `VALIDADO` com base apenas em inspeção visual, documento arquitetural ou existência de endpoint no contrato.
+Cada PR deve atualizar as linhas afetadas com: requisito, fonte, rota/API, migração, teste, evidência de autorização, evidência de acessibilidade, reconciliação e aceite. Nenhuma linha muda para `VALIDADO` com base apenas em inspeção visual, documento arquitetural, quality gate ou existência de endpoint no contrato.
