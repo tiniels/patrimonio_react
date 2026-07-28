@@ -1,0 +1,1882 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Patrimônio Inteligente API
+  version: 0.1.0
+  summary: Contrato inicial da API server-side de gestão patrimonial
+  description: |
+    Baseline contract-first do Dia 2. Este documento descreve a arquitetura-alvo;
+    não comprova que os endpoints já estejam implementados ou que regras ainda
+    não validadas no legado estejam homologadas.
+
+    Todas as operações privadas exigem sessão validada no servidor. Operações
+    mutáveis autenticadas por cookie também exigem proteção CSRF. Comandos
+    críticos usam Idempotency-Key e recursos editáveis usam ETag/If-Match.
+  contact:
+    name: Equipe do Patrimônio Inteligente
+  license:
+    name: Uso institucional
+servers:
+  - url: /api/v1
+    description: Mesmo host da aplicação
+  - url: https://patrimonio-react.vercel.app/api/v1
+    description: Produção
+
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Assets
+  - name: Transfers
+  - name: Inventory
+  - name: Reports
+
+security:
+  - sessionCookie: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Verificar disponibilidade básica do processo
+      security: []
+      responses:
+        "200":
+          description: Processo disponível
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /auth/authorize:
+    get:
+      tags: [Authentication]
+      operationId: authorizeWithIdentityProvider
+      summary: Iniciar autenticação no provedor aprovado
+      description: |
+        Gera state, nonce e PKCE no servidor e redireciona ao IdP. Permanece
+        indisponível enquanto a contenção de segurança estiver ativa.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 500
+            pattern: "^/[^/].*|^/$"
+          description: Caminho local permitido após autenticação.
+      responses:
+        "302":
+          description: Redirecionamento ao provedor de identidade
+          headers:
+            Location:
+              description: URL do provedor aprovado
+              schema:
+                type: string
+                format: uri
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /auth/callback:
+    get:
+      tags: [Authentication]
+      operationId: completeIdentityProviderCallback
+      summary: Concluir callback do provedor de identidade
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 1024
+      responses:
+        "302":
+          description: Sessão criada e usuário redirecionado a um caminho local autorizado
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              description: Cookie de sessão HttpOnly, Secure e SameSite
+              schema:
+                type: string
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /auth/session:
+    get:
+      tags: [Authentication]
+      operationId: getSession
+      summary: Obter o contexto mínimo da sessão ativa
+      responses:
+        "200":
+          description: Sessão ativa
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionContext"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags: [Authentication]
+      operationId: revokeCurrentSession
+      summary: Revogar a sessão atual
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "204":
+          description: Sessão revogada; resposta idempotente
+          headers:
+            Clear-Site-Data:
+              description: Instrução de limpeza quando compatível com a política
+              schema:
+                type: string
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUserContext
+      summary: Obter identidade, vínculos vigentes e capacidades da sessão
+      responses:
+        "200":
+          description: Contexto autorizado e minimizado
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserContext"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /assets:
+    get:
+      tags: [Assets]
+      operationId: listAssets
+      summary: Listar bens no escopo autorizado
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: query
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 120
+        - name: organizationUnitId
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/AssetAdministrativeStatus"
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt, -createdAt, legacyCode, -legacyCode, description, -description]
+            default: -createdAt
+      responses:
+        "200":
+          description: Página de bens autorizados
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateRevalidate"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [Assets]
+      operationId: createAsset
+      summary: Criar bem patrimonial
+      description: Requer a capacidade `asset:create` no escopo informado.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetCreateCommand"
+      responses:
+        "201":
+          description: Bem criado
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [Assets]
+      operationId: getAsset
+      summary: Obter ficha do bem no escopo autorizado
+      responses:
+        "200":
+          description: Ficha do bem
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateRevalidate"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      tags: [Assets]
+      operationId: updateAsset
+      summary: Editar somente atributos permitidos do cadastro mestre
+      description: |
+        Não altera transferência, baixa, inventário, responsabilidade ou outros
+        workflows. Requer `asset:update` no escopo e versão atual.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/AssetPatchCommand"
+      responses:
+        "200":
+          description: Bem atualizado
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers:
+    get:
+      tags: [Transfers]
+      operationId: listTransfers
+      summary: Listar transferências visíveis no escopo
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TransferStatus"
+        - name: direction
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [incoming, outgoing, all]
+            default: all
+      responses:
+        "200":
+          description: Página de transferências
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [Transfers]
+      operationId: createTransfer
+      summary: Criar rascunho de transferência
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferCreateCommand"
+      responses:
+        "201":
+          description: Transferência em rascunho
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}:
+    parameters:
+      - $ref: "#/components/parameters/TransferId"
+    get:
+      tags: [Transfers]
+      operationId: getTransfer
+      summary: Obter transferência autorizada
+      responses:
+        "200":
+          description: Transferência
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}/submit:
+    post:
+      tags: [Transfers]
+      operationId: submitTransfer
+      summary: Submeter transferência para validação/aceite
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferSubmitCommand"
+      responses:
+        "200":
+          $ref: "#/components/responses/TransferCommandSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}/accept:
+    post:
+      tags: [Transfers]
+      operationId: acceptTransfer
+      summary: Aceitar transferência pendente no escopo do destinatário
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferDecisionCommand"
+      responses:
+        "200":
+          $ref: "#/components/responses/TransferCommandSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}/reject:
+    post:
+      tags: [Transfers]
+      operationId: rejectTransfer
+      summary: Rejeitar transferência pendente com motivo
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRejectCommand"
+      responses:
+        "200":
+          $ref: "#/components/responses/TransferCommandSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}/effect:
+    post:
+      tags: [Transfers]
+      operationId: effectTransfer
+      summary: Efetivar transferência aceita de modo atômico
+      description: Requer capacidade privilegiada e segregação de função quando configurada.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferEffectCommand"
+      responses:
+        "200":
+          $ref: "#/components/responses/TransferCommandSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /transfers/{transferId}/cancel:
+    post:
+      tags: [Transfers]
+      operationId: cancelTransfer
+      summary: Cancelar transferência quando a máquina de estado permitir
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReasonCommand"
+      responses:
+        "200":
+          $ref: "#/components/responses/TransferCommandSucceeded"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /inventory-cycles:
+    get:
+      tags: [Inventory]
+      operationId: listInventoryCycles
+      summary: Listar ciclos de inventário autorizados
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/InventoryCycleStatus"
+      responses:
+        "200":
+          description: Página de ciclos
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryCyclePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [Inventory]
+      operationId: createInventoryCycle
+      summary: Criar ciclo de inventário em rascunho
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryCycleCreateCommand"
+      responses:
+        "201":
+          description: Ciclo criado
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryCycle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /inventory-cycles/{cycleId}:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    get:
+      tags: [Inventory]
+      operationId: getInventoryCycle
+      summary: Obter ciclo e progresso autorizado
+      responses:
+        "200":
+          description: Ciclo de inventário
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryCycle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /inventory-cycles/{cycleId}/observations:
+    post:
+      tags: [Inventory]
+      operationId: recordInventoryObservation
+      summary: Registrar observação idempotente de um item do snapshot
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/CycleId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryObservationCommand"
+      responses:
+        "201":
+          description: Observação registrada ou resultado idempotente recuperado
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryObservation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /reports/definitions:
+    get:
+      tags: [Reports]
+      operationId: listReportDefinitions
+      summary: Listar relatórios disponíveis ao perfil/escopo
+      responses:
+        "200":
+          description: Definições autorizadas
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportDefinition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /report-jobs:
+    post:
+      tags: [Reports]
+      operationId: createReportJob
+      summary: Solicitar geração assíncrona de relatório
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportJobCreateCommand"
+      responses:
+        "202":
+          description: Job aceito
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              description: Sugestão de segundos antes de consultar novamente
+              schema:
+                type: integer
+                minimum: 1
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /report-jobs/{reportJobId}:
+    get:
+      tags: [Reports]
+      operationId: getReportJob
+      summary: Consultar estado/resultado de job autorizado
+      parameters:
+        - $ref: "#/components/parameters/ReportJobId"
+      responses:
+        "200":
+          description: Estado do job
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-patrimonio_session
+      description: Sessão opaca/validada no servidor. Nunca disponível ao JavaScript.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Token vinculado à sessão exigido em mutações autenticadas por cookie.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 1024
+      description: Cursor opaco da próxima página.
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._:-]+$"
+      description: Chave única por ator e operação. Reutilização com payload diferente retorna conflito.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^"[0-9]+"$'
+      description: ETag/versão do agregado lido pelo cliente.
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    CycleId:
+      name: cycleId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    ReportJobId:
+      name: reportJobId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Uuid"
+
+  headers:
+    CorrelationId:
+      description: Identificador de correlação seguro para suporte e telemetria.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    ETag:
+      description: Versão forte do recurso.
+      schema:
+        type: string
+        pattern: '^"[0-9]+"$'
+    Location:
+      description: Caminho do recurso criado.
+      schema:
+        type: string
+    NoStore:
+      description: Resposta não deve ser armazenada.
+      schema:
+        type: string
+        const: no-store
+    PrivateNoStore:
+      description: Resposta privada e não armazenável.
+      schema:
+        type: string
+        const: private, no-store
+    PrivateRevalidate:
+      description: Cache privado com revalidação obrigatória.
+      schema:
+        type: string
+        const: private, no-cache
+
+  responses:
+    BadRequest:
+      description: Request malformado ou parâmetro inválido
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Sessão ausente, expirada ou revogada
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Forbidden:
+      description: Ação ou escopo não permitido
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    NotFound:
+      description: Recurso inexistente ou não revelado ao escopo atual
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Conflict:
+      description: Conflito de versão, estado, unicidade ou idempotência
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    UnprocessableEntity:
+      description: Regra de negócio ou validação semântica não atendida
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    PreconditionRequired:
+      description: If-Match obrigatório não informado
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TooManyRequests:
+      description: Limite de abuso/capacidade excedido
+      headers:
+        Retry-After:
+          description: Segundos até nova tentativa sugerida
+          schema:
+            type: integer
+            minimum: 1
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    ServiceUnavailable:
+      description: Serviço ou dependência necessária indisponível
+      headers:
+        Retry-After:
+          description: Segundos até nova tentativa sugerida, quando conhecido
+          schema:
+            type: integer
+            minimum: 1
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TransferCommandSucceeded:
+      description: Comando aplicado ou resultado idempotente recuperado
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Transfer"
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+
+    DateTime:
+      type: string
+      format: date-time
+
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, timestamp, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        timestamp:
+          $ref: "#/components/schemas/DateTime"
+        version:
+          type: string
+          minLength: 7
+          maxLength: 128
+        dependencies:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ok, degraded, unavailable, not_configured]
+
+    SessionContext:
+      type: object
+      additionalProperties: false
+      required: [sessionId, user, issuedAt, expiresAt, csrfToken]
+      properties:
+        sessionId:
+          $ref: "#/components/schemas/Uuid"
+        user:
+          $ref: "#/components/schemas/UserContext"
+        issuedAt:
+          $ref: "#/components/schemas/DateTime"
+        expiresAt:
+          $ref: "#/components/schemas/DateTime"
+        idleExpiresAt:
+          $ref: "#/components/schemas/DateTime"
+        csrfToken:
+          type: string
+          minLength: 32
+          maxLength: 512
+          description: Valor não persistido como segredo de autenticação; vinculado à sessão para proteção CSRF.
+
+    UserContext:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, roles, scopes, capabilities]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        institutionalEmail:
+          type: string
+          format: email
+          maxLength: 254
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationScope"
+        capabilities:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$"
+        terms:
+          type: object
+          additionalProperties: false
+          properties:
+            requiredVersion:
+              type: string
+            acceptedVersion:
+              type: string
+
+    OrganizationScope:
+      type: object
+      additionalProperties: false
+      required: [organizationUnitId, organizationUnitName, validFrom]
+      properties:
+        organizationUnitId:
+          $ref: "#/components/schemas/Uuid"
+        organizationUnitName:
+          type: string
+          minLength: 1
+          maxLength: 300
+        roleCode:
+          type: string
+          maxLength: 100
+        validFrom:
+          $ref: "#/components/schemas/DateTime"
+        validTo:
+          $ref: "#/components/schemas/DateTime"
+
+    PageInfo:
+      type: object
+      additionalProperties: false
+      required: [hasNextPage]
+      properties:
+        nextCursor:
+          type: string
+          maxLength: 1024
+        hasNextPage:
+          type: boolean
+        approximateTotal:
+          type: integer
+          minimum: 0
+          description: Opcional e potencialmente aproximado; não usar para reconciliação oficial.
+
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: "^-?[0-9]+(\\.[0-9]{1,4})?$"
+          description: Decimal serializado como string para preservar precisão.
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          default: BRL
+
+    AssetAdministrativeStatus:
+      type: string
+      enum: [draft, active, inactive, disposed]
+
+    AssetPhysicalCondition:
+      type: string
+      enum: [new, good, fair, poor, unusable, unknown]
+
+    AssetSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - administrativeStatus
+        - physicalCondition
+        - organizationUnitId
+        - version
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        legacyCode:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        organizationUnitId:
+          $ref: "#/components/schemas/Uuid"
+        locationId:
+          $ref: "#/components/schemas/Uuid"
+        administrativeStatus:
+          $ref: "#/components/schemas/AssetAdministrativeStatus"
+        physicalCondition:
+          $ref: "#/components/schemas/AssetPhysicalCondition"
+        acquisitionValue:
+          $ref: "#/components/schemas/Money"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+
+    AssetDetail:
+      allOf:
+        - $ref: "#/components/schemas/AssetSummary"
+        - type: object
+          additionalProperties: false
+          properties:
+            acquisitionDate:
+              type: string
+              format: date
+            identifiers:
+              type: array
+              items:
+                $ref: "#/components/schemas/AssetIdentifier"
+            allowedActions:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+
+    AssetIdentifier:
+      type: object
+      additionalProperties: false
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [patrimonial, serial, barcode, legacy]
+        value:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    AssetPage:
+      type: object
+      additionalProperties: false
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetSummary"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    AssetCreateCommand:
+      type: object
+      additionalProperties: false
+      required: [description, categoryId, organizationUnitId, physicalCondition]
+      properties:
+        legacyCode:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          minLength: 3
+          maxLength: 500
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        organizationUnitId:
+          $ref: "#/components/schemas/Uuid"
+        locationId:
+          $ref: "#/components/schemas/Uuid"
+        physicalCondition:
+          $ref: "#/components/schemas/AssetPhysicalCondition"
+        acquisitionDate:
+          type: string
+          format: date
+        acquisitionValue:
+          $ref: "#/components/schemas/Money"
+        identifiers:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AssetIdentifier"
+
+    AssetPatchCommand:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 500
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        physicalCondition:
+          $ref: "#/components/schemas/AssetPhysicalCondition"
+        acquisitionDate:
+          type: string
+          format: date
+        acquisitionValue:
+          $ref: "#/components/schemas/Money"
+        changeReason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    TransferStatus:
+      type: string
+      enum:
+        - draft
+        - submitted
+        - pending_acceptance
+        - accepted
+        - effecting
+        - effected
+        - rejected
+        - cancelled
+        - expired
+
+    TransferItem:
+      type: object
+      additionalProperties: false
+      required: [id, assetId, assetVersion, resultStatus]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        assetId:
+          $ref: "#/components/schemas/Uuid"
+        assetVersion:
+          type: integer
+          minimum: 1
+        assetLegacyCode:
+          type: string
+          maxLength: 100
+        assetDescription:
+          type: string
+          maxLength: 500
+        resultStatus:
+          type: string
+          enum: [pending, effected, rejected, cancelled, conflict]
+        resultReason:
+          type: string
+          maxLength: 500
+
+    Transfer:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceScopeId
+        - targetScopeId
+        - status
+        - items
+        - version
+        - createdAt
+        - allowedActions
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        sourceScopeId:
+          $ref: "#/components/schemas/Uuid"
+        targetScopeId:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          $ref: "#/components/schemas/TransferStatus"
+        reasonCode:
+          type: string
+          maxLength: 100
+        reasonText:
+          type: string
+          maxLength: 1000
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TransferItem"
+        requestedById:
+          $ref: "#/components/schemas/Uuid"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        allowedActions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [edit, submit, accept, reject, effect, cancel]
+
+    TransferPage:
+      type: object
+      additionalProperties: false
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transfer"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    TransferCreateCommand:
+      type: object
+      additionalProperties: false
+      required: [sourceScopeId, targetScopeId, assetIds]
+      properties:
+        sourceScopeId:
+          $ref: "#/components/schemas/Uuid"
+        targetScopeId:
+          $ref: "#/components/schemas/Uuid"
+        assetIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Uuid"
+        reasonCode:
+          type: string
+          maxLength: 100
+        reasonText:
+          type: string
+          maxLength: 1000
+
+    TransferSubmitCommand:
+      type: object
+      additionalProperties: false
+      required: [confirmAssetVersions]
+      properties:
+        confirmAssetVersions:
+          type: boolean
+          const: true
+        note:
+          type: string
+          maxLength: 1000
+
+    TransferDecisionCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        note:
+          type: string
+          maxLength: 1000
+
+    TransferRejectCommand:
+      type: object
+      additionalProperties: false
+      required: [reasonCode]
+      properties:
+        reasonCode:
+          type: string
+          minLength: 1
+          maxLength: 100
+        reasonText:
+          type: string
+          maxLength: 1000
+
+    TransferEffectCommand:
+      type: object
+      additionalProperties: false
+      required: [confirmAllItems]
+      properties:
+        confirmAllItems:
+          type: boolean
+          const: true
+        effectiveAt:
+          $ref: "#/components/schemas/DateTime"
+        note:
+          type: string
+          maxLength: 1000
+
+    ReasonCommand:
+      type: object
+      additionalProperties: false
+      required: [reasonCode]
+      properties:
+        reasonCode:
+          type: string
+          minLength: 1
+          maxLength: 100
+        reasonText:
+          type: string
+          maxLength: 1000
+
+    InventoryCycleStatus:
+      type: string
+      enum:
+        - draft
+        - scheduled
+        - snapshotting
+        - open
+        - in_reconciliation
+        - ready_to_close
+        - closed
+        - reopen_requested
+
+    InventoryCycle:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, referenceAt, scopeCount, version, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        status:
+          $ref: "#/components/schemas/InventoryCycleStatus"
+        referenceAt:
+          $ref: "#/components/schemas/DateTime"
+        opensAt:
+          $ref: "#/components/schemas/DateTime"
+        closesAt:
+          $ref: "#/components/schemas/DateTime"
+        scopeCount:
+          type: integer
+          minimum: 1
+        progress:
+          type: object
+          additionalProperties: false
+          properties:
+            totalItems:
+              type: integer
+              minimum: 0
+            observedItems:
+              type: integer
+              minimum: 0
+            divergenceItems:
+              type: integer
+              minimum: 0
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+
+    InventoryCyclePage:
+      type: object
+      additionalProperties: false
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryCycle"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    InventoryCycleCreateCommand:
+      type: object
+      additionalProperties: false
+      required: [name, referenceAt, scopeIds]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        referenceAt:
+          $ref: "#/components/schemas/DateTime"
+        opensAt:
+          $ref: "#/components/schemas/DateTime"
+        closesAt:
+          $ref: "#/components/schemas/DateTime"
+        scopeIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Uuid"
+
+    InventoryObservationCommand:
+      type: object
+      additionalProperties: false
+      required: [inventoryItemId, observationType, observedAt, deviceOperationId]
+      properties:
+        inventoryItemId:
+          $ref: "#/components/schemas/Uuid"
+        observationType:
+          type: string
+          enum: [found, not_found, moved, condition_changed, identifier_mismatch]
+        observedLocationId:
+          $ref: "#/components/schemas/Uuid"
+        physicalCondition:
+          $ref: "#/components/schemas/AssetPhysicalCondition"
+        note:
+          type: string
+          maxLength: 2000
+        observedAt:
+          $ref: "#/components/schemas/DateTime"
+        deviceOperationId:
+          type: string
+          minLength: 16
+          maxLength: 128
+
+    InventoryObservation:
+      type: object
+      additionalProperties: false
+      required: [id, inventoryItemId, observationType, result, observedAt, recordedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        inventoryItemId:
+          $ref: "#/components/schemas/Uuid"
+        observationType:
+          type: string
+        result:
+          type: string
+          enum: [accepted, conflict, requires_review]
+        divergenceCaseId:
+          $ref: "#/components/schemas/Uuid"
+        observedAt:
+          $ref: "#/components/schemas/DateTime"
+        recordedAt:
+          $ref: "#/components/schemas/DateTime"
+
+    ReportDefinition:
+      type: object
+      additionalProperties: false
+      required: [code, name, version, official, formats]
+      properties:
+        code:
+          type: string
+          pattern: "^[A-Z0-9_-]+$"
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 200
+        version:
+          type: integer
+          minimum: 1
+        official:
+          type: boolean
+        description:
+          type: string
+          maxLength: 1000
+        formats:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [csv, xlsx, pdf]
+        parameterSchema:
+          type: object
+          additionalProperties: true
+
+    ReportJobCreateCommand:
+      type: object
+      additionalProperties: false
+      required: [reportCode, reportVersion, format, referenceAt, parameters]
+      properties:
+        reportCode:
+          type: string
+          pattern: "^[A-Z0-9_-]+$"
+          maxLength: 100
+        reportVersion:
+          type: integer
+          minimum: 1
+        format:
+          type: string
+          enum: [csv, xlsx, pdf]
+        referenceAt:
+          $ref: "#/components/schemas/DateTime"
+        parameters:
+          type: object
+          additionalProperties: true
+
+    ReportJob:
+      type: object
+      additionalProperties: false
+      required: [id, reportCode, reportVersion, status, requestedAt, referenceAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        reportCode:
+          type: string
+        reportVersion:
+          type: integer
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled, expired]
+        requestedAt:
+          $ref: "#/components/schemas/DateTime"
+        referenceAt:
+          $ref: "#/components/schemas/DateTime"
+        startedAt:
+          $ref: "#/components/schemas/DateTime"
+        completedAt:
+          $ref: "#/components/schemas/DateTime"
+        expiresAt:
+          $ref: "#/components/schemas/DateTime"
+        downloadUrl:
+          type: string
+          format: uri
+          description: URL assinada curta, presente somente após autorização e sucesso.
+        result:
+          type: object
+          additionalProperties: false
+          properties:
+            rowCount:
+              type: integer
+              minimum: 0
+            fileSizeBytes:
+              type: integer
+              minimum: 0
+            sha256:
+              type: string
+              pattern: "^[a-f0-9]{64}$"
+        error:
+          $ref: "#/components/schemas/SafeJobError"
+
+    SafeJobError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        retryable:
+          type: boolean
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [path, code, message]
+      properties:
+        path:
+          type: string
+          maxLength: 500
+        code:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI estável da categoria de problema.
+        title:
+          type: string
+          maxLength: 200
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          maxLength: 2000
+          description: Mensagem segura; nunca contém stack, SQL, segredo ou existência fora de escopo.
+        instance:
+          type: string
+          maxLength: 500
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          maxLength: 100
+        correlationId:
+          type: string
+          minLength: 8
+          maxLength: 128
+        fieldErrors:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/FieldError"
+        currentVersion:
+          type: integer
+          minimum: 1
+        retryable:
+          type: boolean
