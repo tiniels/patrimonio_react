@@ -13,6 +13,7 @@ Registrar o estado AS-IS, iniciar a matriz de paridade e impedir que o snapshot 
 - [x] Repositório, commit-base, stack e rotas principais identificados.
 - [x] Credenciais administrativas codificadas no frontend identificadas sem reprodução dos valores.
 - [x] Base de responsáveis com PII/senhas identificada sem reprodução dos valores.
+- [x] Dois mecanismos de sessão/autenticação no cliente identificados (`authStore` e `respAuth`).
 - [x] Login, sessão, recuperação e redefinição no cliente identificados.
 - [x] Guard de interface identificado como insuficiente para autorização real.
 - [x] Ausência de quality gate/typecheck dedicado registrada.
@@ -34,7 +35,9 @@ Registrar o estado AS-IS, iniciar a matriz de paridade e impedir que o snapshot 
 
 - `.gitignore`
 - `src/lib/authStore.ts`
+- `src/lib/respAuth.ts`
 - `src/lib/respUsers.ts`
+- `src/routes/index.tsx`
 - `src/routes/login.tsx`
 - `src/routes/responsavel-login.tsx`
 - `src/routes/set-password.tsx`
@@ -42,9 +45,9 @@ Registrar o estado AS-IS, iniciar a matriz de paridade e impedir que o snapshot 
 ## Mudanças implementadas
 
 - [x] Remoção de usuários, senhas e PII reais do snapshot corrente do bundle.
-- [x] Desativação de autenticação, sessão e cadastro de credencial no navegador.
+- [x] Desativação dos dois mecanismos de autenticação/sessão do navegador.
 - [x] Limpeza das chaves legadas de sessão/credencial no logout.
-- [x] Substituição das três telas públicas de identidade por contenção acessível.
+- [x] Substituição do portal e das três telas públicas de identidade por contenção acessível.
 - [x] Proibição explícita de `.env` e metadados locais de deploy no Git.
 - [x] Política de segurança e contrato de variáveis sem valores.
 - [x] Inventário AS-IS, catálogo de relatórios e matriz de paridade v1.
@@ -55,7 +58,7 @@ Registrar o estado AS-IS, iniciar a matriz de paridade e impedir que o snapshot 
 | Critério | Resultado | Evidência/Exceção |
 | --- | --- | --- |
 | Segredos e PII removidos do snapshot atual identificado | Atendido para os arquivos críticos confirmados | diff do PR e inspeção dos arquivos alterados |
-| Autenticação simulada não aceita credenciais | Atendido | `authStore.ts` e telas públicas bloqueadas |
+| Autenticação simulada não aceita credenciais | Atendido | `authStore.ts`, `respAuth.ts` e rotas públicas bloqueadas |
 | AS-IS versionado | Atendido | `docs/discovery/AS_IS_INVENTORY.md` |
 | Matriz de paridade v1 | Atendido | `docs/parity/PARITY_MATRIX.md` |
 | Inventário inicial de relatórios | Atendido | `docs/discovery/REPORT_CATALOG.md` |
@@ -71,19 +74,20 @@ Registrar o estado AS-IS, iniciar a matriz de paridade e impedir que o snapshot 
 - [x] Nenhuma nova credencial, chave ou PII foi adicionada.
 - [x] Tela de contenção possui heading, status anunciado, nomes acessíveis e foco visível.
 - [x] Viewport usa largura fluida e breakpoints existentes.
+- [x] Portal raiz não oferece caminho alternativo nem sessão cliente.
 - [ ] Typecheck/build automatizado — pipeline ainda não existe; será criado no Dia 3.
 - [ ] Teste de produção — executar após squash/merge e deploy automático.
 
 ## Roteiro de validação na Vercel
 
-1. Abrir a raiz e verificar que o portal carrega sem erro 5xx.
-2. Abrir `/login`; confirmar a tela de contenção, ausência de campos de credencial e link de retorno.
+1. Abrir a raiz e verificar a tela de contenção sem erro 5xx.
+2. Abrir `/login`; confirmar a tela de contenção e ausência de campos de credencial.
 3. Abrir `/responsavel-login`; confirmar que nenhum usuário, e-mail, telefone, prontuário ou senha é exibido.
 4. Abrir `/set-password`; confirmar que não existe busca de identidade nem formulário de nova senha.
-5. Tentar abrir `/adm`, `/responsavel` e `/chefia`; confirmar redirecionamento para as entradas bloqueadas e ausência de conteúdo protegido.
-6. Navegar somente por teclado e verificar foco visível no link de retorno.
+5. Tentar abrir `/adm`, `/responsavel` e `/chefia`; confirmar redirecionamento e ausência de conteúdo protegido.
+6. Navegar somente por teclado e verificar foco visível nos links disponíveis.
 7. Verificar HTML/scripts publicados procurando apenas nomes de chaves/contratos, nunca valores de credencial ou registros pessoais.
-8. Conferir logs do deploy e registrar o SHA publicado.
+8. Conferir status/logs do deploy e registrar o SHA publicado.
 
 ## Bloqueios para o Dia 2
 
