@@ -5,13 +5,41 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
+const nodeFiles = [
+  "*.config.{js,mjs,ts}",
+  "eslint.config.js",
+  "scripts/**/*.{js,mjs,cjs}",
+  "tests/**/*.{js,mjs,cjs}",
+  "vite.config.ts",
+];
+
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  {
+    ignores: [
+      ".output",
+      ".tanstack",
+      ".vinxi",
+      ".vercel",
+      "coverage",
+      "dist",
+      "node_modules",
+      "src/routeTree.gen.ts",
+    ],
+  },
+  {
+    extends: [js.configs.recommended],
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node,
+      sourceType: "module",
+    },
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       globals: globals.browser,
     },
     plugins: {
@@ -32,8 +60,22 @@ export default tseslint.config(
           ],
         },
       ],
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      "react-refresh/only-export-components": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+          varsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
+    files: nodeFiles,
+    languageOptions: {
+      globals: globals.node,
     },
   },
   eslintPluginPrettier,
