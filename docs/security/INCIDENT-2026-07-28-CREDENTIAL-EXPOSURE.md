@@ -9,19 +9,20 @@
 
 ## Resumo executivo
 
-O protótipo incluía credenciais administrativas em código TypeScript, uma base de responsáveis com dados pessoais e senhas, autenticação executada no navegador, sessão confiada a Web Storage e redefinição de senha local. Como o repositório e a aplicação são públicos, os valores devem ser tratados como comprometidos, independentemente de evidência de uso indevido.
+O protótipo incluía credenciais administrativas em código TypeScript, uma base de responsáveis com dados pessoais e senhas, dois mecanismos de autenticação/sessão executados no navegador, sessão confiada a Web Storage e redefinição de senha local. Como o repositório e a aplicação são públicos, os valores devem ser tratados como comprometidos, independentemente de evidência de uso indevido.
 
 ## Evidências técnicas
 
 | ID | Arquivo/área | Evidência sem conteúdo sensível |
 | --- | --- | --- |
-| EVD-001 | `src/lib/authStore.ts` | registros administrativos com campo de senha e comparação no cliente |
-| EVD-002 | `src/lib/respUsers.ts` | registros pessoais e campo de senha compilados no frontend |
-| EVD-003 | `src/routes/login.tsx` | seleção/preenchimento de contas e login simulado |
-| EVD-004 | `src/routes/responsavel-login.tsx` | exemplos de responsáveis, preenchimento de senha e recuperação simulada |
-| EVD-005 | `src/routes/set-password.tsx` | enumeração de identidade e persistência de nova senha no navegador |
-| EVD-006 | `src/components/AuthGuard.tsx` | autorização de interface baseada em sessão cliente |
-| EVD-007 | histórico/deploy | commits e artefatos anteriores podem conservar os valores removidos do snapshot atual |
+| EVD-001 | `src/lib/authStore.ts` | registros administrativos, comparação de senha e sessão no cliente |
+| EVD-002 | `src/lib/respAuth.ts` | mecanismo alternativo de comparação de senha e sessão em Web Storage |
+| EVD-003 | `src/lib/respUsers.ts` | registros pessoais e campo de senha compilados no frontend |
+| EVD-004 | `src/routes/login.tsx` | seleção/preenchimento de contas e login simulado |
+| EVD-005 | `src/routes/responsavel-login.tsx` | exemplos de responsáveis, preenchimento de senha e recuperação simulada |
+| EVD-006 | `src/routes/set-password.tsx` | enumeração de identidade e persistência de nova senha no navegador |
+| EVD-007 | `src/components/AuthGuard.tsx` | autorização de interface baseada em sessão cliente |
+| EVD-008 | histórico/deploy | commits e artefatos anteriores podem conservar os valores removidos do snapshot atual |
 
 ## Impactos potenciais
 
@@ -36,9 +37,10 @@ O protótipo incluía credenciais administrativas em código TypeScript, uma bas
 
 - [x] Remover registros reais de responsáveis do snapshot atual.
 - [x] Remover credenciais administrativas do snapshot atual.
-- [x] Desativar autenticação e criação de sessão no navegador.
+- [x] Desativar os dois mecanismos de autenticação e criação de sessão no navegador.
 - [x] Desativar primeiro acesso e redefinição de senha no navegador.
 - [x] Remover contas de demonstração das páginas públicas.
+- [x] Colocar o portal raiz em contenção preventiva.
 - [x] Limpar chaves legadas de Web Storage no logout.
 - [x] Bloquear versionamento de `.env` e metadados locais da Vercel.
 - [x] Adicionar política de segurança e documentação de variáveis sem valores.
