@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { RESP_USERS, type RespUser } from "./respUsers";
 
 export type UserRole = "admin" | "contabilidade" | "chefia" | "galpao" | "responsavel";
@@ -45,9 +45,22 @@ export interface AuthenticateResult {
   statusMessage?: string;
 }
 
-export const AUTH_SECURITY_LOCKDOWN = true as const;
+interface AuthSnapshot {
+  user: AuthUser | null;
+  loading: boolean;
+  initialized: boolean;
+  error: string | null;
+}
+
+interface SessionResponse {
+  authenticated: boolean;
+  user?: AuthUser | null;
+  message?: string;
+}
+
+export const AUTH_SECURITY_LOCKDOWN = false as const;
 export const AUTH_LOCKDOWN_MESSAGE =
-  "A autenticação foi temporariamente desativada porque o protótipo anterior processava credenciais no navegador. O acesso será reaberto somente após a ativação da autenticação no servidor.";
+  "A autenticação administrativa foi movida para o servidor. O navegador não armazena credenciais nem cria sessão confiável.";
 
 /**
  * Deliberately empty. Administrative identities must come from the server-side
@@ -55,6 +68,7 @@ export const AUTH_LOCKDOWN_MESSAGE =
  */
 export const ADMIN_USERS: AdminUserRecord[] = [];
 
+const AUTH_SESSION_ENDPOINT = "/api/v1/auth/session";
 const LEGACY_SESSION_KEYS = [
   "smart-patrimonio-session:v2",
   "resp-session:v1",
@@ -64,6 +78,12 @@ const LEGACY_SESSION_KEYS = [
 ] as const;
 
 const LISTENERS = new Set<() => void>();
+let authSnapshot: AuthSnapshot = {
+  user: null,
+  loading: false,
+  initialized: typeof window === "undefined",
+  error: null,
+};
 
 function notifyListeners(): void {
   LISTENERS.forEach((listener) => listener());
@@ -74,14 +94,73 @@ function subscribe(listener: () => void): () => void {
   return () => LISTENERS.delete(listener);
 }
 
-function getNullSnapshot(): AuthUser | null {
-  return null;
+function getAuthSnapshot(): AuthSnapshot {
+  return authSnapshot;
+}
+
+function getServerSnapshot(): AuthSnapshot {
+  return {
+    user: null,
+    loading: false,
+    initialized: false,
+    error: null,
+  };
+}
+
+function setAuthSnapshot(nextSnapshot: AuthSnapshot): void {
+  authSnapshot = nextSnapshot;
+  notifyListeners();
+}
+
+function clearLegacyBrowserStorage(): void {
+  if (typeof window === "undefined") return;
+
+  for (const key of LEGACY_SESSION_KEYS) {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  }
 }
 
 function clientCredentialStorageDisabled(operation: string): never {
   throw new Error(
     `${operation} indisponível: credenciais, usuários e sessões não podem ser persistidos no navegador.`,
   );
+}
+
+export async function refreshAuthSession(): Promise<AuthUser | null> {
+  if (typeof window === "undefined") return null;
+
+  setAuthSnapshot({ ...authSnapshot, loading: true, error: null });
+
+  try {
+    const response = await fetch(AUTH_SESSION_ENDPOINT, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    const payload = (await response.json().catch(() => null)) as SessionResponse | null;
+    const user = response.ok && payload?.authenticated ? payload.user ?? null : null;
+
+    setAuthSnapshot({
+      user,
+      loading: false,
+      initialized: true,
+      error: response.ok ? null : payload?.message ?? "Não foi possível verificar a sessão.",
+    });
+
+    return user;
+  } catch (error) {
+    setAuthSnapshot({
+      user: null,
+      loading: false,
+      initialized: true,
+      error: error instanceof Error ? error.message : "Falha ao verificar a sessão.",
+    });
+    return null;
+  }
 }
 
 /**
@@ -121,7 +200,8 @@ export function getAllRespUsers(): RespUser[] {
 }
 
 /**
- * Client-side authentication is intentionally blocked during containment.
+ * Client-side authentication is intentionally blocked. Login must use the
+ * server-side API, which returns an HttpOnly cookie.
  */
 export function authenticateUserDetailed(
   _loginInput: string,
@@ -135,8 +215,8 @@ export function authenticateUserDetailed(
 }
 
 /**
- * Backward-compatible wrapper. Always returns null until server authentication
- * is enabled.
+ * Backward-compatible wrapper. Always returns null because browser-side
+ * authentication is not trusted.
  */
 export function authenticateUser(_loginInput: string, _senhaInput: string): AuthUser | null {
   return null;
@@ -175,49 +255,65 @@ export function recordTermsAcceptance(_login: string): void {
 
 /**
  * A browser-created session is not trusted. This function remains only to avoid
- * breaking imports while the Day 4 identity implementation is introduced.
+ * breaking imports while callers migrate to the server-side identity API.
  */
 export function signInUser(_user: AuthUser, _rememberMe = true): void {
   clientCredentialStorageDisabled("Criação de sessão");
 }
 
 /**
- * Remove every legacy browser key so a previously forged/stale session cannot
- * survive the security containment release.
+ * Remove every legacy browser key and revoke the current server cookie.
  */
-export function signOutUser(): void {
+export async function signOutUser(): Promise<void> {
+  clearLegacyBrowserStorage();
+
   if (typeof window !== "undefined") {
-    for (const key of LEGACY_SESSION_KEYS) {
-      window.localStorage.removeItem(key);
-      window.sessionStorage.removeItem(key);
-    }
+    await fetch(AUTH_SESSION_ENDPOINT, {
+      method: "DELETE",
+      credentials: "same-origin",
+      headers: {
+        accept: "application/json",
+        "x-csrf-intent": "logout",
+      },
+    }).catch(() => undefined);
   }
-  notifyListeners();
+
+  setAuthSnapshot({ user: null, loading: false, initialized: true, error: null });
 }
 
 /**
  * Browser storage is never a source of authentication truth.
  */
 export function getStoredUser(): AuthUser | null {
-  return null;
+  return authSnapshot.user;
 }
 
 export function getRespAuthSession(): AuthUser | null {
-  return null;
+  return authSnapshot.user?.role === "responsavel" ? authSnapshot.user : null;
 }
 
 export function useAuth() {
-  const user = useSyncExternalStore(subscribe, getNullSnapshot, getNullSnapshot);
+  const snapshot = useSyncExternalStore(subscribe, getAuthSnapshot, getServerSnapshot);
+
+  useEffect(() => {
+    if (!snapshot.initialized && !snapshot.loading) {
+      void refreshAuthSession();
+    }
+  }, [snapshot.initialized, snapshot.loading]);
+
+  const user = snapshot.user;
 
   return {
     user,
-    isAuthenticated: false,
-    loading: false,
-    role: null as UserRole | null,
-    isAdmin: false,
-    isResponsavel: false,
-    isChefia: false,
-    isGalpao: false,
+    isAuthenticated: Boolean(user),
+    loading: snapshot.loading || !snapshot.initialized,
+    error: snapshot.error,
+    role: user?.role ?? null,
+    isAdmin: user?.role === "admin" || user?.role === "contabilidade",
+    isResponsavel: user?.role === "responsavel",
+    isChefia: user?.role === "chefia",
+    isGalpao: user?.role === "galpao",
+    refresh: refreshAuthSession,
     signIn: (_nextUser: AuthUser, _remember = true) => {
       clientCredentialStorageDisabled("Criação de sessão");
     },
