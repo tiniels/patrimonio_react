@@ -299,14 +299,14 @@ async function signSessionPayload(payload: SessionPayload, env: RuntimeEnv): Pro
 }
 
 async function verifySessionToken(token: string, env: RuntimeEnv): Promise<SessionPayload | null> {
-  const [encodedPayload, encodedSignature] = token.split(".");
-  if (!encodedPayload || !encodedSignature) return null;
-
-  const expectedSignature = await hmacSha256(encodedPayload, getEnvValue(env, "SESSION_SECRET"));
-  const receivedSignature = decodeBase64Url(encodedSignature);
-  if (!constantTimeEqual(expectedSignature, receivedSignature)) return null;
-
   try {
+    const [encodedPayload, encodedSignature] = token.split(".");
+    if (!encodedPayload || !encodedSignature) return null;
+
+    const expectedSignature = await hmacSha256(encodedPayload, getEnvValue(env, "SESSION_SECRET"));
+    const receivedSignature = decodeBase64Url(encodedSignature);
+    if (!constantTimeEqual(expectedSignature, receivedSignature)) return null;
+
     const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(encodedPayload))) as SessionPayload;
     const now = Math.floor(Date.now() / 1000);
     if (!payload.sub || !payload.login || payload.exp <= now || payload.sv !== getSessionVersion(env)) {
@@ -335,16 +335,20 @@ function sessionPayloadToUser(payload: SessionPayload): AuthUser {
 }
 
 async function verifyPbkdf2Password(password: string, encodedHash: string): Promise<boolean> {
-  if (!isSupportedPasswordHash(encodedHash) || !isWebCryptoAvailable()) return false;
+  try {
+    if (!isSupportedPasswordHash(encodedHash) || !isWebCryptoAvailable()) return false;
 
-  const [, rawIterations, rawSalt, rawHash] = encodedHash.split("$");
-  const iterations = Number(rawIterations);
-  if (!Number.isInteger(iterations) || iterations < 120_000 || iterations > 1_200_000) return false;
+    const [, rawIterations, rawSalt, rawHash] = encodedHash.split("$");
+    const iterations = Number(rawIterations);
+    if (!Number.isInteger(iterations) || iterations < 120_000 || iterations > 1_200_000) return false;
 
-  const salt = decodeBase64Url(rawSalt);
-  const expectedHash = decodeBase64Url(rawHash);
-  const actualHash = await derivePbkdf2Sha256(password, salt, iterations, expectedHash.byteLength * 8);
-  return constantTimeEqual(actualHash, expectedHash);
+    const salt = decodeBase64Url(rawSalt);
+    const expectedHash = decodeBase64Url(rawHash);
+    const actualHash = await derivePbkdf2Sha256(password, salt, iterations, expectedHash.byteLength * 8);
+    return constantTimeEqual(actualHash, expectedHash);
+  } catch {
+    return false;
+  }
 }
 
 async function burnPasswordVerificationTime(encodedHash: string, password: string): Promise<void> {
@@ -607,7 +611,15 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
 
 function randomToken(bytesLength: number): string {
   const bytes = new Uint8Array(bytesLength);
-  globalThis.crypto.getRandomValues(bytes);
+
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
   return base64UrlEncode(bytes);
 }
 
