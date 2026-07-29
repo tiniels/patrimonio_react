@@ -62,11 +62,8 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      - name: Prettier diagnostic
-        run: |
-          npx prettier --write src/lib/authStore.ts src/routes/_app.adm.buscas.tsx
-          git diff -- src/lib/authStore.ts src/routes/_app.adm.buscas.tsx
-          test -z "$(git status --porcelain -- src/lib/authStore.ts src/routes/_app.adm.buscas.tsx)"
+      - name: Prettier check
+        run: npm run format:check
 
       - name: Validate OpenAPI contract
         run: npm run check:openapi
