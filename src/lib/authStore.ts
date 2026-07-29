@@ -1,12 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { RESP_USERS, type RespUser } from "./respUsers";
 
-export type UserRole =
-  | "admin"
-  | "contabilidade"
-  | "chefia"
-  | "galpao"
-  | "responsavel";
+export type UserRole = "admin" | "contabilidade" | "chefia" | "galpao" | "responsavel";
 
 export interface AuthUser {
   id: string;
@@ -45,10 +40,7 @@ export interface AdminUserRecord {
 }
 
 export type AuthenticateFailureReason =
-  | "invalid_credentials"
-  | "vinculo_expirado"
-  | "somente_leitura"
-  | "service_unavailable";
+  "invalid_credentials" | "vinculo_expirado" | "somente_leitura" | "service_unavailable";
 
 export interface AuthenticateResult {
   user: AuthUser | null;
@@ -149,10 +141,7 @@ export function authenticateUserDetailed(
  * Backward-compatible wrapper. Always returns null until server authentication
  * is enabled.
  */
-export function authenticateUser(
-  _loginInput: string,
-  _senhaInput: string,
-): AuthUser | null {
+export function authenticateUser(_loginInput: string, _senhaInput: string): AuthUser | null {
   return null;
 }
 
