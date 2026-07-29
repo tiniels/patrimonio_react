@@ -63,25 +63,18 @@ export async function handleAuthApiRequest(
   env: unknown,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-
-  if (!url.pathname.startsWith("/api/v1/auth/")) {
-    return null;
-  }
+  if (!url.pathname.startsWith("/api/v1/auth/")) return null;
 
   const runtimeEnv = env as RuntimeEnv;
   const correlationId = getCorrelationId(request);
 
   if (url.pathname === "/api/v1/auth/status") {
-    if (request.method !== "GET") {
-      return methodNotAllowed(correlationId, ["GET"]);
-    }
+    if (request.method !== "GET") return methodNotAllowed(correlationId, ["GET"]);
     return jsonResponse(getPublicStatus(runtimeEnv), { correlationId });
   }
 
   if (url.pathname === "/api/v1/auth/admin/login") {
-    if (request.method !== "POST") {
-      return methodNotAllowed(correlationId, ["POST"]);
-    }
+    if (request.method !== "POST") return methodNotAllowed(correlationId, ["POST"]);
     return handleAdminLogin(request, runtimeEnv, correlationId);
   }
 
@@ -114,12 +107,10 @@ async function handleAdminLogin(
   }
 
   const status = getPublicStatus(env);
-
   if (status.lockdownEnabled) {
     auditAuthEvent("admin_login_blocked", correlationId, "lockdown_enabled");
     return problemResponse(503, "auth_lockdown_enabled", status.message, correlationId);
   }
-
   if (!status.configured) {
     auditAuthEvent("admin_login_blocked", correlationId, "provider_not_configured");
     return problemResponse(503, "auth_provider_not_configured", status.message, correlationId);
@@ -130,7 +121,6 @@ async function handleAdminLogin(
 
   const login = getSafeString(body.data.login).trim().toLowerCase();
   const password = getSafeString(body.data.password);
-
   if (!login || !password || login.length > MAX_LOGIN_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
     auditAuthEvent("admin_login_failed", correlationId, "invalid_payload");
     return problemResponse(
@@ -170,17 +160,11 @@ async function handleAdminLogin(
   auditAuthEvent("admin_login_succeeded", correlationId, "session_created");
 
   return jsonResponse(
-    {
-      authenticated: true,
-      user,
-      csrfToken: session.csrfToken,
-    },
+    { authenticated: true, user, csrfToken: session.csrfToken },
     {
       status: 200,
       correlationId,
-      headers: {
-        "Set-Cookie": session.cookie,
-      },
+      headers: { "Set-Cookie": session.cookie },
     },
   );
 }
@@ -190,25 +174,22 @@ async function handleGetSession(
   env: RuntimeEnv,
   correlationId: string,
 ): Promise<Response> {
-  const sessionCookie = parseCookies(request.headers.get("cookie") ?? "")[SESSION_COOKIE_NAME];
-
-  if (!sessionCookie) {
+  const token = parseCookies(request.headers.get("cookie") ?? "")[SESSION_COOKIE_NAME];
+  if (!token) {
     return jsonResponse(
       { authenticated: false, user: null, csrfToken: null },
       { status: 200, correlationId },
     );
   }
 
-  const payload = await verifySessionToken(sessionCookie, env);
+  const payload = await verifySessionToken(token, env);
   if (!payload) {
     return jsonResponse(
       { authenticated: false, user: null, csrfToken: null },
       {
         status: 200,
         correlationId,
-        headers: {
-          "Set-Cookie": buildExpiredSessionCookie(),
-        },
+        headers: { "Set-Cookie": buildExpiredSessionCookie() },
       },
     );
   }
@@ -238,18 +219,14 @@ async function handleLogout(
     );
   }
 
-  const sessionCookie = parseCookies(request.headers.get("cookie") ?? "")[SESSION_COOKIE_NAME];
-  if (!sessionCookie) {
-    return emptyResponse(204, correlationId, {
-      "Set-Cookie": buildExpiredSessionCookie(),
-    });
+  const token = parseCookies(request.headers.get("cookie") ?? "")[SESSION_COOKIE_NAME];
+  if (!token) {
+    return emptyResponse(204, correlationId, { "Set-Cookie": buildExpiredSessionCookie() });
   }
 
-  const payload = await verifySessionToken(sessionCookie, env);
+  const payload = await verifySessionToken(token, env);
   if (!payload) {
-    return emptyResponse(204, correlationId, {
-      "Set-Cookie": buildExpiredSessionCookie(),
-    });
+    return emptyResponse(204, correlationId, { "Set-Cookie": buildExpiredSessionCookie() });
   }
 
   const csrfToken = request.headers.get("x-csrf-token") ?? "";
@@ -272,7 +249,7 @@ async function handleLogout(
 
 function getPublicStatus(env: RuntimeEnv): AuthStatus {
   const lockdownEnabled = getBooleanEnv(env, "AUTH_LOCKDOWN_ENABLED", true);
-  const provider = getEnvValue(env, "AUTH_PROVIDER") || "not-configured";
+  const provider = getEnvValue(env, "AUTH_PROVIDER");
   const sessionSecret = getEnvValue(env, "SESSION_SECRET");
   const login = getEnvValue(env, "ADMIN_BOOTSTRAP_LOGIN");
   const passwordHash = getEnvValue(env, "ADMIN_BOOTSTRAP_PASSWORD_HASH");
@@ -289,18 +266,12 @@ function getPublicStatus(env: RuntimeEnv): AuthStatus {
     configured,
     provider: configured ? "server-side" : "unavailable",
     cookieName: SESSION_COOKIE_NAME,
-    message: getStatusMessage(lockdownEnabled, configured),
+    message: lockdownEnabled
+      ? "O acesso administrativo permanece bloqueado até a conclusão da configuração segura."
+      : configured
+        ? "Autenticação administrativa server-side disponível."
+        : "O provedor de autenticação administrativa ainda não está configurado.",
   };
-}
-
-function getStatusMessage(lockdownEnabled: boolean, configured: boolean): string {
-  if (lockdownEnabled) {
-    return "O acesso administrativo permanece bloqueado até a conclusão da configuração segura.";
-  }
-  if (configured) {
-    return "Autenticação administrativa server-side disponível.";
-  }
-  return "O provedor de autenticação administrativa ainda não está configurado.";
 }
 
 async function verifyLocalAdmin(
@@ -310,21 +281,16 @@ async function verifyLocalAdmin(
 ): Promise<AuthUser | null> {
   const configuredLogin = getEnvValue(env, "ADMIN_BOOTSTRAP_LOGIN").trim().toLowerCase();
   const passwordHash = getEnvValue(env, "ADMIN_BOOTSTRAP_PASSWORD_HASH");
-
   if (!configuredLogin || login !== configuredLogin) {
     await burnPasswordVerificationTime(passwordHash, password);
     return null;
   }
-
-  const passwordMatches = await verifyPbkdf2Password(password, passwordHash);
-  if (!passwordMatches) return null;
+  if (!(await verifyPbkdf2Password(password, passwordHash))) return null;
 
   const role = parseAdminRole(getEnvValue(env, "ADMIN_BOOTSTRAP_ROLE"));
-  const name = getEnvValue(env, "ADMIN_BOOTSTRAP_DISPLAY_NAME") || "Administrador do Patrimônio";
-
   return {
     id: getEnvValue(env, "ADMIN_BOOTSTRAP_ID") || `admin-${stableTextHash(configuredLogin)}`,
-    name,
+    name: getEnvValue(env, "ADMIN_BOOTSTRAP_DISPLAY_NAME") || "Administrador do Patrimônio",
     login: configuredLogin,
     role,
     roleLabel: getEnvValue(env, "ADMIN_BOOTSTRAP_ROLE_LABEL") || roleToLabel(role),
@@ -365,12 +331,8 @@ async function createSession(
     nonce: randomToken(18),
     csrf: csrfToken,
   };
-
   const token = await signSessionPayload(payload, env);
-  return {
-    cookie: buildSessionCookie(token, maxAge),
-    csrfToken,
-  };
+  return { cookie: buildSessionCookie(token, maxAge), csrfToken };
 }
 
 async function signSessionPayload(payload: SessionPayload, env: RuntimeEnv): Promise<string> {
@@ -387,27 +349,24 @@ async function verifySessionToken(
     const [encodedPayload, encodedSignature] = token.split(".");
     if (!encodedPayload || !encodedSignature) return null;
 
-    const expectedSignature = await hmacSha256(
-      encodedPayload,
-      getEnvValue(env, "SESSION_SECRET"),
-    );
-    const receivedSignature = decodeBase64Url(encodedSignature);
-    if (!constantTimeEqual(expectedSignature, receivedSignature)) return null;
+    const expected = await hmacSha256(encodedPayload, getEnvValue(env, "SESSION_SECRET"));
+    const received = decodeBase64Url(encodedSignature);
+    if (!constantTimeEqual(expected, received)) return null;
 
-    const decodedPayload = new TextDecoder().decode(decodeBase64Url(encodedPayload));
-    const payload = JSON.parse(decodedPayload) as SessionPayload;
+    const payload = JSON.parse(
+      new TextDecoder().decode(decodeBase64Url(encodedPayload)),
+    ) as SessionPayload;
     const now = Math.floor(Date.now() / 1000);
-
     if (
       !payload.sub ||
       !payload.login ||
       !payload.csrf ||
       payload.exp <= now ||
-      payload.sv !== getSessionVersion(env)
+      payload.sv !== getSessionVersion(env) ||
+      !ADMIN_ROLES.includes(payload.role)
     ) {
       return null;
     }
-    if (!ADMIN_ROLES.includes(payload.role)) return null;
     return payload;
   } catch {
     return null;
@@ -432,7 +391,6 @@ function sessionPayloadToUser(payload: SessionPayload): AuthUser {
 async function verifyPbkdf2Password(password: string, encodedHash: string): Promise<boolean> {
   try {
     if (!isSupportedPasswordHash(encodedHash) || !isWebCryptoAvailable()) return false;
-
     const [, rawIterations, rawSalt, rawHash] = encodedHash.split("$");
     const iterations = Number(rawIterations);
     if (!Number.isInteger(iterations) || iterations < 120_000 || iterations > 1_200_000) {
@@ -470,13 +428,18 @@ async function derivePbkdf2Sha256(
 ): Promise<Uint8Array> {
   const keyMaterial = await globalThis.crypto.subtle.importKey(
     "raw",
-    utf8(password),
+    bytesToArrayBuffer(utf8(password)),
     "PBKDF2",
     false,
     ["deriveBits"],
   );
   const derivedBits = await globalThis.crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: bytesToArrayBuffer(salt),
+      iterations,
+    },
     keyMaterial,
     lengthBits,
   );
@@ -486,12 +449,23 @@ async function derivePbkdf2Sha256(
 async function hmacSha256(data: string, secret: string): Promise<Uint8Array> {
   const key = await globalThis.crypto.subtle.importKey(
     "raw",
-    utf8(secret),
+    bytesToArrayBuffer(utf8(secret)),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
-  return new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", key, utf8(data)));
+  const signature = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    bytesToArrayBuffer(utf8(data)),
+  );
+  return new Uint8Array(signature);
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }
 
 function checkRateLimit(
@@ -512,14 +486,12 @@ function checkRateLimit(
     if (current) ATTEMPT_BUCKETS.delete(key);
     return { allowed: true };
   }
-
   if (current.count >= maxAttempts) {
     return {
       allowed: false,
       retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
     };
   }
-
   return { allowed: true };
 }
 
@@ -533,16 +505,11 @@ function recordFailedAttempt(request: Request, login: string, env: RuntimeEnv): 
       DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
     ) * 1000;
   const current = ATTEMPT_BUCKETS.get(key);
-
   if (!current || current.resetAt <= now) {
     ATTEMPT_BUCKETS.set(key, { count: 1, resetAt: now + windowMs });
     return;
   }
-
-  ATTEMPT_BUCKETS.set(key, {
-    count: current.count + 1,
-    resetAt: current.resetAt,
-  });
+  ATTEMPT_BUCKETS.set(key, { count: current.count + 1, resetAt: current.resetAt });
 }
 
 function clearFailedAttempts(request: Request, login: string): void {
@@ -559,12 +526,9 @@ function getClientAddress(request: Request): string {
 }
 
 function isTrustedMutationRequest(request: Request): boolean {
-  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
-  if (fetchSite === "cross-site") return false;
-
+  if (request.headers.get("sec-fetch-site")?.toLowerCase() === "cross-site") return false;
   const origin = request.headers.get("origin");
   if (!origin) return true;
-
   try {
     return new URL(origin).origin === new URL(request.url).origin;
   } catch {
@@ -576,8 +540,7 @@ async function readJsonBody(
   request: Request,
   correlationId: string,
 ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; response: Response }> {
-  const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
     return {
       ok: false,
       response: problemResponse(
@@ -631,10 +594,7 @@ function jsonResponse(
 ): Response {
   const headers = buildResponseHeaders(options.correlationId, options.headers);
   headers.set("content-type", "application/json; charset=utf-8");
-  return new Response(JSON.stringify(data), {
-    status: options.status ?? 200,
-    headers,
-  });
+  return new Response(JSON.stringify(data), { status: options.status ?? 200, headers });
 }
 
 function emptyResponse(
@@ -670,17 +630,8 @@ function problemResponse(
   extraHeaders: Record<string, string> = {},
 ): Response {
   return jsonResponse(
-    {
-      ok: false,
-      code,
-      message,
-      correlationId,
-    },
-    {
-      status,
-      correlationId,
-      headers: extraHeaders,
-    },
+    { ok: false, code, message, correlationId },
+    { status, correlationId, headers: extraHeaders },
   );
 }
 
@@ -701,8 +652,7 @@ function buildExpiredSessionCookie(): string {
 function parseCookies(cookieHeader: string): Record<string, string> {
   return cookieHeader.split(";").reduce<Record<string, string>>((cookies, part) => {
     const [rawName, ...valueParts] = part.trim().split("=");
-    if (!rawName) return cookies;
-    cookies[rawName] = valueParts.join("=");
+    if (rawName) cookies[rawName] = valueParts.join("=");
     return cookies;
   }, {});
 }
@@ -712,7 +662,6 @@ function getEnvValue(env: RuntimeEnv, key: string): string {
     const value = env[key];
     if (typeof value === "string") return value.trim();
   }
-
   const runtime = globalThis as typeof globalThis & {
     process?: { env?: Record<string, string | undefined> };
   };
@@ -720,8 +669,7 @@ function getEnvValue(env: RuntimeEnv, key: string): string {
 }
 
 function getOptionalEnvValue(env: RuntimeEnv, key: string): string | undefined {
-  const value = getEnvValue(env, key);
-  return value || undefined;
+  return getEnvValue(env, key) || undefined;
 }
 
 function getBooleanEnv(env: RuntimeEnv, key: string, defaultValue: boolean): boolean {
@@ -732,8 +680,8 @@ function getBooleanEnv(env: RuntimeEnv, key: string, defaultValue: boolean): boo
 }
 
 function getNumberEnv(env: RuntimeEnv, key: string, defaultValue: number): number {
-  const rawValue = Number(getEnvValue(env, key));
-  return Number.isFinite(rawValue) && rawValue > 0 ? Math.floor(rawValue) : defaultValue;
+  const value = Number(getEnvValue(env, key));
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : defaultValue;
 }
 
 function getSessionVersion(env: RuntimeEnv): string {
@@ -745,13 +693,12 @@ function parseAdminRole(value: string): AdminRole {
 }
 
 function roleToLabel(role: AdminRole): string {
-  const labels: Record<AdminRole, string> = {
+  return {
     admin: "Administrador",
     contabilidade: "Contabilidade",
     chefia: "Chefia",
     galpao: "Galpão Central",
-  };
-  return labels[role];
+  }[role];
 }
 
 function isSupportedPasswordHash(value: string): boolean {
@@ -773,9 +720,7 @@ function utf8(value: string): Uint8Array {
 
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
+  for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
@@ -785,11 +730,7 @@ function decodeBase64Url(value: string): Uint8Array {
     .replace(/_/g, "/")
     .padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
@@ -802,9 +743,7 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 function randomToken(bytesLength: number): string {
-  if (!globalThis.crypto?.getRandomValues) {
-    throw new Error("secure_random_unavailable");
-  }
+  if (!globalThis.crypto?.getRandomValues) throw new Error("secure_random_unavailable");
   const bytes = new Uint8Array(bytesLength);
   globalThis.crypto.getRandomValues(bytes);
   return base64UrlEncode(bytes);
@@ -821,10 +760,7 @@ function stableTextHash(value: string): string {
 
 function getCorrelationId(request: Request): string {
   const provided = request.headers.get("x-correlation-id")?.trim();
-  if (provided && /^[A-Za-z0-9._:-]{1,100}$/u.test(provided)) {
-    return provided;
-  }
-
+  if (provided && /^[A-Za-z0-9._:-]{1,100}$/u.test(provided)) return provided;
   try {
     return `req_${randomToken(12)}`;
   } catch {
