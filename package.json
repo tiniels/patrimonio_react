@@ -3,13 +3,24 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "vite dev --port 8081",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "lint": "eslint .",
-    "format": "prettier --write ."
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint eslint.config.js vite.config.ts scripts tests src/lib/authStore.ts src/lib/patrimonioDb.ts src/routes/_app.adm.buscas.tsx src/routes/_app.inventario.lista.tsx src/routes/_resp.responsavel.tsx --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check \"eslint.config.js\" \"vite.config.ts\" \"scripts/**/*.mjs\" \"tests/**/*.mjs\" \"src/lib/authStore.ts\" \"src/lib/patrimonioDb.ts\" \"src/routes/_app.adm.buscas.tsx\" \"src/routes/_app.inventario.lista.tsx\" \"src/routes/_resp.responsavel.tsx\" \"package.json\" \".github/**/*.{yml,yaml}\"",
+    "check:env": "node scripts/check-env-example.mjs",
+    "check:secrets": "node scripts/check-sensitive-files.mjs",
+    "check:openapi": "npx --yes @redocly/cli@2.40.0 lint --extends=spec --max-problems=100 packages/contracts/openapi/patrimonio-v1.yaml",
+    "audit:production": "npm audit --omit=dev --audit-level=high",
+    "verify": "npm run check:env && npm run check:secrets && npm test && npm run typecheck && npm run lint && npm run format:check && npm run check:openapi && npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

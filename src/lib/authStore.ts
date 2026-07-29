@@ -22,6 +22,12 @@ export interface AuthUser {
   termsAccepted?: boolean;
   termsAcceptedAt?: string;
   lastLogin?: string;
+
+  // Legacy display aliases kept only while existing screens are migrated to the
+  // server-authorized identity contract. They never carry browser credentials.
+  responsavel?: string;
+  responsavelNome?: string;
+  unidadeNome?: string;
 }
 
 /**
@@ -34,10 +40,7 @@ export interface AdminUserRecord {
 }
 
 export type AuthenticateFailureReason =
-  | "invalid_credentials"
-  | "vinculo_expirado"
-  | "somente_leitura"
-  | "service_unavailable";
+  "invalid_credentials" | "vinculo_expirado" | "somente_leitura" | "service_unavailable";
 
 export interface AuthenticateResult {
   user: AuthUser | null;
@@ -143,21 +146,27 @@ export function authenticateUser(_loginInput: string, _senhaInput: string): Auth
 }
 
 export function convertRespToAuthUser(resp: RespUser): AuthUser {
+  const responsibleName = resp.responsavelNome || resp.responsavel;
+  const unitName = resp.unidadeNome || resp.setor;
+
   return {
     id: `resp-${resp.unidadeCodigo ?? resp.login}`,
-    name: resp.responsavelNome || resp.responsavel,
+    name: responsibleName,
     login: resp.login,
     role: "responsavel",
     roleLabel: "Responsável de Setor",
     cargo: resp.cargoResponsavel ?? "Responsável Patrimonial",
     secretaria: resp.secretariaNome || resp.secretaria,
-    setor: resp.unidadeNome || resp.setor,
+    setor: unitName,
     codigoSetor: resp.unidadeCodigo,
-    unidade: resp.unidadeNome || resp.setor,
+    unidade: unitName,
     prontuario: resp.prontuarioResponsavel || resp.prontuario,
     email: resp.email,
     telefone: resp.telefone,
     status: resp.status,
+    responsavel: responsibleName,
+    responsavelNome: responsibleName,
+    unidadeNome: unitName,
   };
 }
 

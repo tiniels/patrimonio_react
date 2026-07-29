@@ -1,18 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import {
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  QrCode,
-  FileCheck,
-  Building,
-  Tag,
-  MapPin,
-  RefreshCw,
-  Download,
-  Filter,
-} from "lucide-react";
+import { Download, Filter } from "lucide-react";
 import { PageHeader, KPIGrid } from "@/components/PageStub";
 import { usePatrimonioData } from "@/hooks/usePatrimonioData";
 
@@ -38,11 +26,15 @@ function InventarioListaPage() {
 
   const rows = useMemo(() => {
     if (!patrimonioState.rows) return [];
-    return patrimonioState.rows.filter((r) => {
-      if (qChapa && !r.chapa.toLowerCase().includes(qChapa.toLowerCase().trim())) return false;
-      if (qDesc && !r.descricao.toLowerCase().includes(qDesc.toLowerCase().trim())) return false;
-      if (qLocal && !r.local.toLowerCase().includes(qLocal.toLowerCase().trim())) return false;
-      if (situacaoFilter && r.situacao !== situacaoFilter) return false;
+    return patrimonioState.rows.filter((row) => {
+      const chapa = row.chapa.toLowerCase();
+      const description = (row.descricao ?? "").toLowerCase();
+      const location = (row.local ?? "").toLowerCase();
+
+      if (qChapa && !chapa.includes(qChapa.toLowerCase().trim())) return false;
+      if (qDesc && !description.includes(qDesc.toLowerCase().trim())) return false;
+      if (qLocal && !location.includes(qLocal.toLowerCase().trim())) return false;
+      if (situacaoFilter && row.situacao !== situacaoFilter) return false;
       return true;
     });
   }, [patrimonioState.rows, qChapa, qDesc, qLocal, situacaoFilter]);
@@ -50,11 +42,20 @@ function InventarioListaPage() {
   const kpis = useMemo(
     () => [
       { label: "Total de Bens Filtrados", value: String(rows.length) },
-      { label: "Bens Em Uso Regular", value: String(rows.filter((r) => r.situacao === "EM USO").length) },
-      { label: "Transferências Pendentes", value: String(rows.filter((r) => r.situacao === "EM TRANSIÇÃO").length) },
-      { label: "Sem Informação", value: String(rows.filter((r) => r.situacao === "NÃO INFORMADO").length) },
+      {
+        label: "Bens Em Uso Regular",
+        value: String(rows.filter((row) => row.situacao === "EM USO").length),
+      },
+      {
+        label: "Transferências Pendentes",
+        value: String(rows.filter((row) => row.situacao === "EM TRANSIÇÃO").length),
+      },
+      {
+        label: "Sem Informação",
+        value: String(rows.filter((row) => row.situacao === "NÃO INFORMADO").length),
+      },
     ],
-    [rows]
+    [rows],
   );
 
   return (
@@ -62,51 +63,60 @@ function InventarioListaPage() {
       <PageHeader
         title="Meu Inventário / Lista de Bens (MOD-12)"
         description="Listagem numérica ordenada de bens com busca por chapa, descrição e localização física."
-        crumbs={[{ label: "Painel", to: "/adm" }, { label: "Inventário" }, { label: "Lista de Bens" }]}
+        crumbs={[
+          { label: "Painel", to: "/adm" },
+          { label: "Inventário" },
+          { label: "Lista de Bens" },
+        ]}
         actions={
           <button
+            type="button"
             onClick={() => alert("Exportando lista de inventário em CSV...")}
-            className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-xs font-bold inline-flex items-center gap-1.5 hover:opacity-90"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-bold text-primary-foreground hover:opacity-90"
           >
-            <Download className="h-4 w-4" /> Exportar Lista (CSV)
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Exportar Lista (CSV)
           </button>
         }
       />
 
       <KPIGrid items={kpis} />
 
-      {/* FILTROS MULTI-CAMPO */}
-      <section className="glass-card p-4 border border-border/60">
-        <div className="flex items-center gap-2 mb-3 text-sm text-muted-foreground">
-          <Filter className="h-4 w-4 text-primary" />
+      <section className="glass-card border border-border/60 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <Filter className="h-4 w-4 text-primary" aria-hidden="true" />
           <span className="font-medium text-foreground">Filtros da Lista de Inventário</span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
           <input
+            aria-label="Filtrar por chapa"
             value={qChapa}
-            onChange={(e) => setQChapa(e.target.value)}
+            onChange={(event) => setQChapa(event.target.value)}
             placeholder="Chapa (ex: 100452)..."
-            className="h-10 px-3 rounded-md border border-input bg-background/60 text-xs font-mono"
+            className="h-10 rounded-md border border-input bg-background/60 px-3 font-mono text-xs"
           />
 
           <input
+            aria-label="Filtrar por descrição"
             value={qDesc}
-            onChange={(e) => setQDesc(e.target.value)}
+            onChange={(event) => setQDesc(event.target.value)}
             placeholder="Descrição do patrimônio..."
-            className="h-10 px-3 rounded-md border border-input bg-background/60 text-xs"
+            className="h-10 rounded-md border border-input bg-background/60 px-3 text-xs"
           />
 
           <input
+            aria-label="Filtrar por localização"
             value={qLocal}
-            onChange={(e) => setQLocal(e.target.value)}
+            onChange={(event) => setQLocal(event.target.value)}
             placeholder="Localização / Sala..."
-            className="h-10 px-3 rounded-md border border-input bg-background/60 text-xs"
+            className="h-10 rounded-md border border-input bg-background/60 px-3 text-xs"
           />
 
           <select
+            aria-label="Filtrar por situação"
             value={situacaoFilter}
-            onChange={(e) => setSituacaoFilter(e.target.value)}
+            onChange={(event) => setSituacaoFilter(event.target.value)}
             className="h-10 rounded-md border border-input bg-background/60 px-3 text-xs font-semibold"
           >
             <option value="">Todas as situações</option>
@@ -117,36 +127,52 @@ function InventarioListaPage() {
         </div>
       </section>
 
-      {/* TABELA DE BENS */}
-      <section className="glass-card p-0 overflow-hidden border border-border/60">
+      <section className="glass-card overflow-hidden border border-border/60 p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-muted/50 text-left font-semibold text-foreground border-b border-border/60">
+            <thead className="border-b border-border/60 bg-muted/50 text-left font-semibold text-foreground">
               <tr>
-                <th className="p-3">Chapa</th>
-                <th className="p-3">Descrição</th>
-                <th className="p-3">Localização / Setor</th>
-                <th className="p-3">Situação</th>
-                <th className="p-3">Estado</th>
-                <th className="p-3 text-right">Ação</th>
+                <th scope="col" className="p-3">
+                  Chapa
+                </th>
+                <th scope="col" className="p-3">
+                  Descrição
+                </th>
+                <th scope="col" className="p-3">
+                  Localização / Setor
+                </th>
+                <th scope="col" className="p-3">
+                  Situação
+                </th>
+                <th scope="col" className="p-3">
+                  Estado
+                </th>
+                <th scope="col" className="p-3 text-right">
+                  Ação
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {rows.slice(0, 100).map((r) => (
-                <tr key={r.chapa} className="hover:bg-accent/10 transition-colors">
-                  <td className="p-3 font-mono font-bold text-primary">{r.chapa}</td>
-                  <td className="p-3 font-medium text-foreground">{r.descricao}</td>
-                  <td className="p-3 text-muted-foreground">{r.local}</td>
+              {rows.slice(0, 100).map((row) => (
+                <tr key={row.chapa} className="transition-colors hover:bg-accent/10">
+                  <td className="p-3 font-mono font-bold text-primary">{row.chapa}</td>
+                  <td className="p-3 font-medium text-foreground">
+                    {row.descricao ?? "Não informado"}
+                  </td>
+                  <td className="p-3 text-muted-foreground">{row.local ?? "Não informado"}</td>
                   <td className="p-3">
-                    <span className="px-2 py-0.5 rounded bg-muted text-[10px] uppercase font-bold">
-                      {r.situacao}
+                    <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-bold uppercase">
+                      {row.situacao ?? "Não informado"}
                     </span>
                   </td>
-                  <td className="p-3 text-muted-foreground">{r.estadoConservacao || "BOM"}</td>
+                  <td className="p-3 text-muted-foreground">
+                    {row.estadoConservacao ?? "Não informado"}
+                  </td>
                   <td className="p-3 text-right">
                     <button
-                      onClick={() => alert(`Ficha do patrimônio ${r.chapa}`)}
-                      className="px-2.5 py-1 rounded bg-muted hover:bg-muted/80 text-[11px] font-semibold"
+                      type="button"
+                      onClick={() => alert(`Ficha do patrimônio ${row.chapa}`)}
+                      className="rounded bg-muted px-2.5 py-1 text-[11px] font-semibold hover:bg-muted/80"
                     >
                       Detalhes
                     </button>
