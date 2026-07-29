@@ -54,9 +54,7 @@ function ProtectedQueriesPage() {
             <ShieldAlert className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-foreground">
-              Acesso preventivamente bloqueado
-            </h2>
+            <h2 className="text-lg font-bold text-foreground">Acesso preventivamente bloqueado</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               A contenção remove a possibilidade de visualizar ou exportar material de autenticação.
               Credenciais nunca fazem parte de relatórios, tabelas administrativas ou arquivos de
@@ -74,10 +72,7 @@ function ProtectedQueriesPage() {
         <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
           {REOPENING_REQUIREMENTS.map((requirement) => (
             <li key={requirement} className="flex items-start gap-3">
-              <span
-                className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary"
-                aria-hidden="true"
-              />
+              <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
               <span>{requirement}</span>
             </li>
           ))}
