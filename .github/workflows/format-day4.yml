@@ -1,0 +1,65 @@
+name: Format Day 4
+
+on:
+  push:
+    branches:
+      - agent/dia-4-auth-admin-sessao
+
+permissions:
+  contents: write
+
+concurrency:
+  group: format-day4-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Day 4 branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/dia-4-auth-admin-sessao
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frozen dependencies
+        run: npm ci
+
+      - name: Format exact Day 4 files
+        run: |
+          npm exec -- prettier --write \
+            tests/auth-admin-server.test.mjs \
+            src/components/AppShell.tsx \
+            src/components/AuthGuard.tsx \
+            src/lib/auth/adminAuth.server.ts \
+            src/lib/authStore.ts \
+            src/routes/login.tsx
+
+      - name: Commit formatted files when needed
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/auth-admin-server.test.mjs \
+            src/components/AppShell.tsx \
+            src/components/AuthGuard.tsx \
+            src/lib/auth/adminAuth.server.ts \
+            src/lib/authStore.ts \
+            src/routes/login.tsx
+          git commit -m "chore(format): aplicar Prettier no Dia 4"
+          git push origin HEAD:agent/dia-4-auth-admin-sessao
