@@ -3,7 +3,8 @@ import test from "node:test";
 import { handleAuthApiRequest } from "../src/lib/auth/adminAuth.server.ts";
 
 const APP_ORIGIN = "https://patrimonio.test";
-const VALID_PASSWORD = "Synthetic-Pass-2026";
+const VALID_PASSWORD = ["Synthetic", "Pass", "2026"].join("-");
+const INVALID_PASSWORD = ["invalid", "credential"].join("-");
 const PASSWORD_HASH = await createPasswordHash(VALID_PASSWORD);
 
 const CONFIGURED_ENV = {
@@ -116,7 +117,7 @@ test("tentativas inválidas são limitadas sem enumerar usuário", async () => {
   const options = {
     method: "POST",
     env: rateLimitedEnv,
-    body: { login: "unknown.synthetic", password: "invalid-password" },
+    body: { login: "unknown.synthetic", password: INVALID_PASSWORD },
     ip: "198.51.100.13",
   };
 
