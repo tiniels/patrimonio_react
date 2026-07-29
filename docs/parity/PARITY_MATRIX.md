@@ -1,7 +1,7 @@
 # Matriz de Paridade v1
 
-**Versão:** 0.3 — Dia 3  
-**Data:** 28 de julho de 2026  
+**Versão:** 0.4 — Dia 4  
+**Data:** 29 de julho de 2026  
 **Regra:** a existência de uma rota React, contrato ou quality gate não comprova paridade funcional. Cada linha só pode ser encerrada com evidência do legado autenticado, contrato homologado, implementação, teste, reconciliação quando aplicável e aceite do dono do processo.
 
 ## Status permitidos
@@ -18,7 +18,7 @@
 | ID | Módulo | Evidência atual | Estado | Trilha prevista | Evidência mínima para validar |
 | --- | --- | --- | --- | --- | --- |
 | MOD-01 | Portal de entrada e seleção de perfil | Página pública e rota `/` em contenção | CONTIDO | Dias 7–8 | walkthrough, acessibilidade, sessão válida e aceite |
-| MOD-02 | Autenticação administrativa | `/login`, `authStore`; ADR-0004 e contrato de sessão | CONTIDO | Dia 4 | IdP/servidor, cookie seguro, revogação, abuso e auditoria |
+| MOD-02 | Autenticação administrativa | `/login`; `/api/v1/auth/status`, `/admin/login` e `/session`; `authStore`; `adminAuth.server`; testes sintéticos | EM IMPLEMENTAÇÃO | Dia 4 | configuração Vercel/IdP aprovada, cookie e sessão em produção, rate limit distribuído, revogação persistente, abuso e aceite |
 | MOD-03 | Autenticação do responsável | `/responsavel-login`, `/set-password`; ADR-0004 | CONTIDO | Dia 6 | vínculo temporal, primeiro acesso, recuperação e auditoria |
 | MOD-04 | Usuários, perfis, permissões e escopos | rotas de usuários; BC-01/BC-02 e `/me` proposto | PROTÓTIPO | Dia 5 | catálogo de permissões, policy backend e revisão de acessos |
 | MOD-05 | Painel administrativo | `/adm`; BC-12 proposto | PROTÓTIPO | Dia 23 | fórmulas, data de corte, escopo e reconciliação |
@@ -77,7 +77,7 @@
 
 | Evidência | Cobertura | Estado | Limite/bloqueio |
 | --- | --- | --- | --- |
-| `.github/workflows/ci.yml` | instalação, segurança, testes, tipos, lint, formato, OpenAPI e build | implementado no PR do Dia 3 | checks ainda precisam ser obrigatórios na `main` — issue #7 |
+| `.github/workflows/ci.yml` | instalação, segurança, testes, tipos, lint, formato, OpenAPI e build | implementado no Dia 3 | checks ainda precisam ser obrigatórios na `main` — issue #7 |
 | `.nvmrc`, `.npmrc`, `package-lock.json` | runtime e instalação reproduzível | Node 24 LTS e `npm ci` definidos | mudança de dependência exige atualização controlada do lockfile |
 | `scripts/check-env-example.mjs` | configuração e defaults seguros | testado com fixtures sintéticas | validação runtime server-side entra com cada módulo |
 | `scripts/check-sensitive-files.mjs` | arquivos/padrões sensíveis | encontrou e bloqueou riscos adicionais | complementa, não substitui secret scanning/push protection |
@@ -89,13 +89,23 @@
 | `README.md` | entrada operacional e de segurança | substituído | não comprova funcionalidade de domínio |
 | contenção de `patrimonioDb` e `/adm/buscas` | MOD-06, MOD-08, MOD-22 | acesso direto e credenciais removidos | reabertura depende de API/policies e incidente #2 |
 
+## Evidências de identidade do Dia 4
+
+| Evidência | Cobertura | Estado | Limite/bloqueio |
+| --- | --- | --- | --- |
+| `src/lib/auth/adminAuth.server.ts` | MOD-02 | API, sessão assinada, cookie, CSRF e rate limit em implementação | provedor temporário, rate limit não distribuído e sem revogação persistente individual |
+| `src/routes/login.tsx`, `authStore` e `AuthGuard` | MOD-02 | UI conectada à sessão server-side e bloqueada por default | ativação exige configuração segura da Vercel |
+| `tests/auth-admin-server.test.mjs` | MOD-02 | massa sintética cobre login, cookie, sessão, logout, CSRF e abuso | não substitui teste no runtime real configurado |
+| `docs/runbooks/VERCEL_AUTH_CONFIGURATION.md` | MOD-02 e MOD-39 | ordem de configuração, ativação e rollback documentada | valores e execução pertencem ao administrador da Vercel |
+| `docs/runbooks/BREAK_GLASS.md` | governança transversal | processo de exceção auditável documentado | bypass administrativo depende das regras reais da `main` |
+
 ## Exceções e bloqueios formais
 
 | ID | Bloqueio | Impacto | Owner necessário | Situação |
 | --- | --- | --- | --- | --- |
 | BLK-001 | Walkthrough autenticado do legado não executado | impede confirmar campos, estados, permissões e relatórios | Produto + usuários-chave | Aberto |
 | BLK-002 | Credenciais/chaves expostas precisam de rotação, revisão de policies e logs | impede encerrar o incidente e reabrir identidade/dados | Segurança + administradores/DBA | Aberto — issue #2 |
-| BLK-003 | Fonte oficial de identidade e dados não definida | impede Dias 4–6 e persistência real | Arquitetura + segurança + DBA | Aberto |
+| BLK-003 | Fonte oficial de identidade e dados não definida | impede substituir o bootstrap temporário, concluir autorização e avançar o portal do responsável | Arquitetura + segurança + DBA | Aberto |
 | BLK-004 | Catálogo e fórmulas de relatórios não homologados | impede reconciliação e paridade de saída | Contabilidade + negócio | Aberto |
 | BLK-005 | UAT e signatários não definidos | impede status `VALIDADO` e go-live | Sponsor + Product Owner | Aberto |
 | BLK-006 | PostgreSQL, storage, fila e limites operacionais não aprovados | impede persistência, arquivos e jobs reais | Infra + DBA + segurança | Aberto |
@@ -103,6 +113,7 @@
 | BLK-008 | Owners definidos apenas por função | impede aceite formal dos módulos/ADRs | Sponsor + gestores das áreas | Aberto |
 | BLK-009 | Branch protection e checks obrigatórios ainda não comprovados | permite bypass administrativo do CI | Admin GitHub | Aberto — issue #7 |
 | BLK-010 | Layout físico `apps/*` ainda não migrado | mantém estrutura raiz do protótipo | Tech Lead/DevOps | Exceção temporária; root tratada como `apps/web` lógico |
+| BLK-011 | Variáveis reais e teste controlado da autenticação não executados na Vercel | mantém o login bloqueado e impede evidência do cookie no runtime real | Admin Vercel + segurança | Aberto; fallback `AUTH_LOCKDOWN_ENABLED=true` |
 
 ## Regra de atualização
 
