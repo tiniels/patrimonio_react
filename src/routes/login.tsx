@@ -227,10 +227,7 @@ function LoginPage() {
                   aria-hidden="true"
                 />
               ) : (
-                <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                  aria-hidden="true"
-                />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               )}
               <div>
                 <strong>{authUnavailable ? "Acesso indisponível:" : "Serviço ativo:"}</strong>{" "}

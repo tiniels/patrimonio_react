@@ -37,10 +37,7 @@ export interface AdminUserRecord {
 }
 
 export type AuthenticateFailureReason =
-  | "invalid_credentials"
-  | "vinculo_expirado"
-  | "somente_leitura"
-  | "service_unavailable";
+  "invalid_credentials" | "vinculo_expirado" | "somente_leitura" | "service_unavailable";
 
 export interface AuthenticateResult {
   user: AuthUser | null;
@@ -146,15 +143,15 @@ export async function refreshAuthSession(): Promise<AuthUser | null> {
     });
 
     const payload = (await response.json().catch(() => null)) as SessionResponse | null;
-    const user = response.ok && payload?.authenticated ? payload.user ?? null : null;
-    const csrfToken = user ? payload?.csrfToken ?? null : null;
+    const user = response.ok && payload?.authenticated ? (payload.user ?? null) : null;
+    const csrfToken = user ? (payload?.csrfToken ?? null) : null;
 
     setAuthSnapshot({
       user,
       csrfToken,
       loading: false,
       initialized: true,
-      error: response.ok ? null : payload?.message ?? "Não foi possível verificar a sessão.",
+      error: response.ok ? null : (payload?.message ?? "Não foi possível verificar a sessão."),
     });
 
     return user;

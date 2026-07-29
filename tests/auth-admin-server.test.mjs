@@ -182,11 +182,7 @@ async function createPasswordHash(password) {
     ["deriveBits"],
   );
   const hash = new Uint8Array(
-    await crypto.subtle.deriveBits(
-      { name: "PBKDF2", hash: "SHA-256", salt, iterations },
-      key,
-      256,
-    ),
+    await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256),
   );
 
   return `pbkdf2_sha256$${iterations}$${toBase64Url(salt)}$${toBase64Url(hash)}`;

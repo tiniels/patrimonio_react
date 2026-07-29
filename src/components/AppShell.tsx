@@ -69,9 +69,7 @@ function GroupMenu({ group, pathname }: { group: NavGroup; pathname: string }) {
                   key={item.to}
                   to={item.to}
                   className={`px-3 py-2 rounded-md text-sm flex flex-col gap-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    active
-                      ? "bg-primary/15 text-primary"
-                      : "hover:bg-accent/40 text-foreground"
+                    active ? "bg-primary/15 text-primary" : "hover:bg-accent/40 text-foreground"
                   }`}
                 >
                   <span className="font-medium">{item.label}</span>
@@ -179,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="hidden md:flex flex-col items-end leading-tight">
               <span className="text-xs text-muted-foreground">Sessão segura</span>
               <span className="text-sm font-medium">
-                {loading ? "verificando..." : user?.name ?? "usuário autenticado"}
+                {loading ? "verificando..." : (user?.name ?? "usuário autenticado")}
               </span>
             </div>
             <button
@@ -213,9 +211,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      {mobileOpen ? (
-        <MobileNav pathname={pathname} onClose={() => setMobileOpen(false)} />
-      ) : null}
+      {mobileOpen ? <MobileNav pathname={pathname} onClose={() => setMobileOpen(false)} /> : null}
 
       <main className="flex-1 mx-auto w-full max-w-[1400px] px-4 py-6">{children}</main>
 

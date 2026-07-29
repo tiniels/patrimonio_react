@@ -88,7 +88,12 @@ export async function handleAuthApiRequest(
     return methodNotAllowed(correlationId, ["GET", "DELETE"]);
   }
 
-  return problemResponse(404, "not_found", "Endpoint de autenticação não encontrado.", correlationId);
+  return problemResponse(
+    404,
+    "not_found",
+    "Endpoint de autenticação não encontrado.",
+    correlationId,
+  );
 }
 
 async function handleAdminLogin(
@@ -121,7 +126,12 @@ async function handleAdminLogin(
 
   const login = getSafeString(body.data.login).trim().toLowerCase();
   const password = getSafeString(body.data.password);
-  if (!login || !password || login.length > MAX_LOGIN_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+  if (
+    !login ||
+    !password ||
+    login.length > MAX_LOGIN_LENGTH ||
+    password.length > MAX_PASSWORD_LENGTH
+  ) {
     auditAuthEvent("admin_login_failed", correlationId, "invalid_payload");
     return problemResponse(
       400,
@@ -308,11 +318,7 @@ async function createSession(
   env: RuntimeEnv,
 ): Promise<{ cookie: string; csrfToken: string }> {
   const now = Math.floor(Date.now() / 1000);
-  const maxAge = getNumberEnv(
-    env,
-    "AUTH_SESSION_MAX_AGE_SECONDS",
-    DEFAULT_SESSION_MAX_AGE_SECONDS,
-  );
+  const maxAge = getNumberEnv(env, "AUTH_SESSION_MAX_AGE_SECONDS", DEFAULT_SESSION_MAX_AGE_SECONDS);
   const csrfToken = randomToken(24);
   const payload: SessionPayload = {
     sub: user.id,
@@ -341,10 +347,7 @@ async function signSessionPayload(payload: SessionPayload, env: RuntimeEnv): Pro
   return `${encodedPayload}.${base64UrlEncode(signature)}`;
 }
 
-async function verifySessionToken(
-  token: string,
-  env: RuntimeEnv,
-): Promise<SessionPayload | null> {
+async function verifySessionToken(token: string, env: RuntimeEnv): Promise<SessionPayload | null> {
   try {
     const [encodedPayload, encodedSignature] = token.split(".");
     if (!encodedPayload || !encodedSignature) return null;
@@ -411,10 +414,7 @@ async function verifyPbkdf2Password(password: string, encodedHash: string): Prom
   }
 }
 
-async function burnPasswordVerificationTime(
-  encodedHash: string,
-  password: string,
-): Promise<void> {
+async function burnPasswordVerificationTime(encodedHash: string, password: string): Promise<void> {
   if (isSupportedPasswordHash(encodedHash)) {
     await verifyPbkdf2Password(password, encodedHash);
   }
@@ -499,11 +499,7 @@ function recordFailedAttempt(request: Request, login: string, env: RuntimeEnv): 
   const key = getAttemptKey(request, login);
   const now = Date.now();
   const windowMs =
-    getNumberEnv(
-      env,
-      "AUTH_RATE_LIMIT_WINDOW_SECONDS",
-      DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
-    ) * 1000;
+    getNumberEnv(env, "AUTH_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS) * 1000;
   const current = ATTEMPT_BUCKETS.get(key);
   if (!current || current.resetAt <= now) {
     ATTEMPT_BUCKETS.set(key, { count: 1, resetAt: now + windowMs });
@@ -574,12 +570,7 @@ async function readJsonBody(
   } catch {
     return {
       ok: false,
-      response: problemResponse(
-        400,
-        "invalid_json",
-        "JSON inválido ou malformado.",
-        correlationId,
-      ),
+      response: problemResponse(400, "invalid_json", "JSON inválido ou malformado.", correlationId),
     };
   }
 }

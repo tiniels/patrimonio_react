@@ -39,7 +39,15 @@ export function AuthGuard({
         replace: true,
       });
     }
-  }, [allowedRoles, fallbackLoginPath, isAuthenticated, loading, location.pathname, mounted, navigate]);
+  }, [
+    allowedRoles,
+    fallbackLoginPath,
+    isAuthenticated,
+    loading,
+    location.pathname,
+    mounted,
+    navigate,
+  ]);
 
   const handleSwitchAccount = async () => {
     setSwitchingAccount(true);
